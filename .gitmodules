@@ -1,0 +1,6 @@
+[submodule "rke2/ansible-role-rke2"]
+	path = rke2/ansible-role-rke2
+	url = https://github.com/lablabs/ansible-role-rke2.git
+[submodule "rke2/kube-ovn"]
+	path = rke2/kube-ovn
+	url = https://github.com/kubeovn/kube-ovn.git
