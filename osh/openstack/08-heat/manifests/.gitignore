@@ -1,0 +1,4 @@
+secret-keystone.yaml
+configmap-etc.yaml
+secret-db.yaml
+secret-rabbitmq.yaml

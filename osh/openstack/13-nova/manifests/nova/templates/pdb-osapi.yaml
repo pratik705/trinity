@@ -1,0 +1,13 @@
+---
+# Source: nova/templates/pdb-osapi.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nova-api-osapi
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: nova
+      application: nova
+      component: os-api

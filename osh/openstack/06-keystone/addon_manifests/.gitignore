@@ -1,0 +1,4 @@
+keystone-credential-keys-secret.yaml
+keystone-rabbitmq-password-secret.yaml
+keystone-db-password-secret.yaml
+keystone-admin-secret.yaml

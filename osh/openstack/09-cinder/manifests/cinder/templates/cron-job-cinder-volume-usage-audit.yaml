@@ -1,0 +1,172 @@
+---
+# Source: cinder/templates/cron-job-cinder-volume-usage-audit.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cinder-volume-usage-audit
+  namespace: openstack
+---
+# Source: cinder/templates/cron-job-cinder-volume-usage-audit.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cinder-openstack-cinder-volume-usage-audit
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: cinder/templates/cron-job-cinder-volume-usage-audit.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cinder-cinder-volume-usage-audit
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cinder-openstack-cinder-volume-usage-audit
+subjects:
+  - kind: ServiceAccount
+    name: cinder-volume-usage-audit
+    namespace: openstack
+---
+# Source: cinder/templates/cron-job-cinder-volume-usage-audit.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cinder-volume-usage-audit
+  labels:
+    release_group: cinder
+    application: cinder
+    component: volume-usage-audit
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  schedule: "5 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 600
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        release_group: cinder
+        application: cinder
+        component: volume-usage-audit
+    spec:
+      template:
+        metadata:
+          labels:
+            release_group: cinder
+            application: cinder
+            component: volume-usage-audit
+          annotations:
+            
+        spec:
+          securityContext:
+            runAsUser: 42424
+          serviceAccountName: cinder-volume-usage-audit
+          restartPolicy: OnFailure
+
+          nodeSelector:
+            openstack-control-plane: enabled
+          initContainers:
+            
+            - name: init
+              image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+              imagePullPolicy: IfNotPresent  
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsUser: 65534
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.name
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.namespace
+                - name: INTERFACE_NAME
+                  value: eth0
+                - name: PATH
+                  value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+                - name: DEPENDENCY_SERVICE
+                  value: "openstack:keystone-api,openstack:cinder-api"
+                - name: DEPENDENCY_JOBS
+                  value: "cinder-db-sync,cinder-ks-user,cinder-ks-endpoints"
+                - name: DEPENDENCY_DAEMONSET
+                  value: ""
+                - name: DEPENDENCY_CONTAINER
+                  value: ""
+                - name: DEPENDENCY_POD_JSON
+                  value: ""
+                - name: DEPENDENCY_CUSTOM_RESOURCE
+                  value: ""
+              command:
+                - kubernetes-entrypoint
+              volumeMounts:
+                null
+          containers:
+            - name: cinder-volume-usage-audit
+              image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 2000m
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+              
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+              command:
+                - /tmp/volume-usage-audit.sh
+              volumeMounts:
+                - name: pod-tmp
+                  mountPath: /tmp
+                - name: etccinder
+                  mountPath: /etc/cinder
+                - name: cinder-etc
+                  mountPath: /etc/cinder/cinder.conf
+                  subPath: cinder.conf
+                  readOnly: true
+                - name: cinder-etc
+                  mountPath: /etc/cinder/logging.conf
+                  subPath: logging.conf
+                  readOnly: true
+                - name: cinder-bin
+                  mountPath: /tmp/volume-usage-audit.sh
+                  subPath: volume-usage-audit.sh
+                  readOnly: true                                                
+
+          volumes:
+            - name: pod-tmp
+              emptyDir: {}
+            - name: etccinder
+              emptyDir: {}
+            - name: cinder-etc
+              secret:
+                secretName: cinder-etc
+                defaultMode: 0444
+            - name: cinder-bin
+              configMap:
+                name: cinder-bin
+                defaultMode: 0555

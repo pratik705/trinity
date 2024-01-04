@@ -1,0 +1,13 @@
+---
+# Source: octavia/templates/pdb-api.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: octavia-api
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: octavia
+      application: octavia
+      component: api

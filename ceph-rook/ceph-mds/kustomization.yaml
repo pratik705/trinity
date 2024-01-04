@@ -1,0 +1,4 @@
+namespace: rook-ceph
+resources:
+  - './CephFilesystem_CR.yaml'
+  - './storageClass-cephfs.yaml'

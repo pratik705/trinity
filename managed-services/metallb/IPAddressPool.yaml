@@ -1,0 +1,7 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: br-mgmt-network
+spec:
+  addresses:
+  - 172.22.223.1-172.22.223.254

@@ -1,0 +1,15 @@
+---
+# Source: octavia/templates/service-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: octavia-api
+spec:
+  ports:
+    - name: o-api
+      port: 9876
+    
+  selector:
+    release_group: octavia
+    application: octavia
+    component: api

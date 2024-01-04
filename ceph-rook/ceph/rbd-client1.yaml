@@ -1,0 +1,11 @@
+---
+apiVersion: ceph.rook.io/v1
+kind: CephClient
+metadata:
+  name: rbd-client
+  namespace: rook-ceph
+spec:
+  caps:
+    mon: 'profile rbd, allow r'
+    osd: 'profile rbd pool=cinder.volumes.gold'
+    mgr: 'allow rw'

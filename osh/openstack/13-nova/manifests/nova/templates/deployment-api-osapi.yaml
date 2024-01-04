@@ -1,0 +1,234 @@
+---
+# Source: nova/templates/deployment-api-osapi.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-api-osapi
+  namespace: openstack
+---
+# Source: nova/templates/deployment-api-osapi.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-openstack-nova-api-osapi
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: nova/templates/deployment-api-osapi.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-nova-api-osapi
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-openstack-nova-api-osapi
+subjects:
+  - kind: ServiceAccount
+    name: nova-api-osapi
+    namespace: openstack
+---
+# Source: nova/templates/deployment-api-osapi.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-api-osapi
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: nova
+    application: nova
+    component: os-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: nova
+      application: nova
+      component: os-api
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: nova
+        application: nova
+        component: os-api
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "c0731208acf9da1f9ec571309a6a67d14bf8940fee2f770cd1572c4b21f56bd1"
+        configmap-etc-hash: "eaaacdc05c614c2e8c4bb19019c2bfdc5dd838f53d49d256ec41e15740a98b1f"
+        
+    spec:
+      serviceAccountName: nova-api-osapi
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - nova
+                  - key: application
+                    operator: In
+                    values:
+                    - nova
+                  - key: component
+                    operator: In
+                    values:
+                    - os-api
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:rabbitmq-nodes,openstack:mariadb-galera-primary,openstack:keystone-api"
+            - name: DEPENDENCY_JOBS
+              value: "nova-db-sync,nova-ks-user,nova-ks-endpoints"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: nova-osapi
+          image: "docker.io/openstackhelm/nova:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 8000m
+              memory: 6024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/nova-api.sh
+            - start
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/nova-api.sh
+                  - stop
+          ports:
+            - name: n-api
+              containerPort: 8774
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8774
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8774
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: pod-var-nova
+              mountPath: /var/lib/nova
+            - name: nova-bin
+              mountPath: /tmp/nova-api.sh
+              subPath: nova-api.sh
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/nova.conf
+              subPath: nova.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/api-paste.ini
+              subPath: api-paste.ini
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/api_audit_map.conf
+              subPath: api_audit_map.conf
+              readOnly: true                                    
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: pod-var-nova
+          emptyDir: {}
+        - name: nova-bin
+          configMap:
+            name: nova-bin
+            defaultMode: 0555
+        - name: nova-etc
+          secret:
+            secretName: nova-etc
+            defaultMode: 0444

@@ -1,0 +1,8 @@
+namespace: rook-ceph
+resources:
+  - './cephCluster_CR.yaml'
+  - './ceph-general-replicapool.yaml'
+  - './storageClass-general.yaml'
+  - './rbd-pool1.yaml'
+  - './rbd-client1.yaml'
+

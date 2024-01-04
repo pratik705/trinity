@@ -1,0 +1,4 @@
+namespace: openstack
+resources:
+  - './encrypted-mariadb-secret.yaml'
+  - './MariaDB_CR.yaml'

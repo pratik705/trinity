@@ -1,0 +1,13 @@
+---
+# Source: neutron/templates/pdb-server.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: neutron-server
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: neutron
+      application: neutron
+      component: server

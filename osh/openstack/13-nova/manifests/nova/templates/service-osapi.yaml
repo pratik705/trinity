@@ -1,0 +1,15 @@
+---
+# Source: nova/templates/service-osapi.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nova-api
+spec:
+  ports:
+  - name: n-api
+    port: 8774
+    
+  selector:
+    release_group: nova
+    application: nova
+    component: os-api

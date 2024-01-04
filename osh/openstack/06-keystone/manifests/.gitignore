@@ -1,0 +1,6 @@
+secret-keystone.yaml
+secret-credential-keys.yaml
+configmap-etc.yaml
+secret-fernet-keys.yaml
+secret-db.yaml
+secret-rabbitmq.yaml

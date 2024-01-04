@@ -1,0 +1,86 @@
+---
+# Source: heat/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heat
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: heat-api-trinity.pbandark.com
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: heat
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-api
+                port:
+                  name: "h-api"
+    - host: heat.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-api
+                port:
+                  name: "h-api"
+    - host: heat.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-api
+                port:
+                  name: "h-api"
+---
+# Source: heat/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heat-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: heat-api-trinity.pbandark.com
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: heat-api-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-api
+                port:
+                  name: "h-api"
+---
+# Source: heat/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heat-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: heat-api-trinity.pbandark.com
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: heat-api-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-api
+                port:
+                  name: "h-api"

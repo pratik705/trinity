@@ -1,0 +1,112 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/heat/templates/configmap-bin.yaml
+- manifests/heat/templates/cron-job-engine-cleaner.yaml
+- manifests/heat/templates/cron-job-purge-deleted.yaml
+- manifests/heat/templates/deployment-api.yaml
+- manifests/heat/templates/deployment-cfn.yaml
+- manifests/heat/templates/deployment-engine.yaml
+- manifests/heat/templates/encrypted-configmap-etc.yaml
+- manifests/heat/templates/encrypted-secret-db.yaml
+- manifests/heat/templates/encrypted-secret-keystone.yaml
+- manifests/heat/templates/encrypted-secret-rabbitmq.yaml
+- manifests/heat/templates/ingress-api.yaml
+- manifests/heat/templates/ingress-cfn.yaml
+- manifests/heat/templates/job-bootstrap.yaml
+- manifests/heat/templates/job-db-sync.yaml
+- manifests/heat/templates/job-ks-endpoints.yaml
+- manifests/heat/templates/job-ks-service.yaml
+- manifests/heat/templates/job-ks-user-domain.yaml
+- manifests/heat/templates/job-ks-user-trustee.yaml
+- manifests/heat/templates/job-ks-user.yaml
+- manifests/heat/templates/job-trusts.yaml
+- manifests/heat/templates/network_policy.yaml
+- manifests/heat/templates/pdb-api.yaml
+- manifests/heat/templates/pdb-cfn.yaml
+- manifests/heat/templates/service-api.yaml
+- manifests/heat/templates/service-cfn.yaml
+- manifests/heat/templates/service-ingress-api.yaml
+- manifests/heat/templates/service-ingress-cfn.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: heat-bootstrap
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-domain-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-trustee-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: heat-trusts
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: heat-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: heat-api
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: heat-cfn
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: heat-cfn
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: heat-engine
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: heat-engine
+    spec:
+      replicas: null

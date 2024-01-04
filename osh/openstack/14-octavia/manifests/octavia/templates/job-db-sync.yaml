@@ -1,0 +1,153 @@
+---
+# Source: octavia/templates/job-db-sync.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: octavia-db-sync
+  namespace: openstack
+---
+# Source: octavia/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: octavia-openstack-octavia-db-sync
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+---
+# Source: octavia/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: octavia-octavia-db-sync
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: octavia-openstack-octavia-db-sync
+subjects:
+  - kind: ServiceAccount
+    name: octavia-db-sync
+    namespace: openstack
+---
+# Source: octavia/templates/job-db-sync.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "octavia-db-sync"
+  labels:
+    release_group: octavia
+    application: octavia
+    component: db-sync
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-4"
+spec:
+  backoffLimit: 1000
+  template:
+    metadata:
+      labels:
+        release_group: octavia
+        application: octavia
+        component: db-sync
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+    spec:
+      serviceAccountName: octavia-db-sync
+      restartPolicy: OnFailure
+            
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: "octavia-db-sync"
+          image: "ghcr.io/cloudnull/genestack/octavia-ovn:master-ubuntu_jammy"
+          imagePullPolicy: "IfNotPresent"
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/db-sync.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: db-sync-sh
+              mountPath: /tmp/db-sync.sh
+              subPath: db-sync.sh
+              readOnly: true
+            - name: etc-service
+              mountPath: "/etc/octavia"
+            - name: db-sync-conf
+              mountPath: "/etc/octavia/octavia.conf"
+              subPath: "octavia.conf"
+              readOnly: true
+            - name: db-sync-conf
+              mountPath: "/etc/octavia/logging.conf"
+              subPath: "logging.conf"
+              readOnly: true            
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: db-sync-sh
+          configMap:
+            name: "octavia-bin"
+            defaultMode: 0555
+        - name: etc-service
+          emptyDir: {}
+        - name: db-sync-conf
+          secret:
+            secretName: "octavia-etc"
+            defaultMode: 0444

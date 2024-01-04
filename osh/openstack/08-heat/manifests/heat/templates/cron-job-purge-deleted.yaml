@@ -1,0 +1,167 @@
+---
+# Source: heat/templates/cron-job-purge-deleted.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heat-purge-deleted
+  namespace: openstack
+---
+# Source: heat/templates/cron-job-purge-deleted.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: heat-openstack-heat-purge-deleted
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: heat/templates/cron-job-purge-deleted.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: heat-heat-purge-deleted
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: heat-openstack-heat-purge-deleted
+subjects:
+  - kind: ServiceAccount
+    name: heat-purge-deleted
+    namespace: openstack
+---
+# Source: heat/templates/cron-job-purge-deleted.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: heat-purge-deleted
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  schedule: "20 */24 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        release_group: heat
+        application: heat
+        component: purge-deleted
+      annotations:
+        
+    spec:
+      template:
+        metadata:
+          labels:
+            release_group: heat
+            application: heat
+            component: purge-deleted
+          annotations:
+            "openstackhelm.openstack.org/release_uuid": ""
+            
+        spec:
+          serviceAccountName: heat-purge-deleted
+          restartPolicy: OnFailure
+
+          nodeSelector:
+            openstack-control-plane: enabled
+          initContainers:
+            
+            - name: init
+              image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+              imagePullPolicy: IfNotPresent  
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsUser: 65534
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.name
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.namespace
+                - name: INTERFACE_NAME
+                  value: eth0
+                - name: PATH
+                  value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+                - name: DEPENDENCY_SERVICE
+                  value: "openstack:mariadb-galera-primary,openstack:rabbitmq-nodes,openstack:keystone-api"
+                - name: DEPENDENCY_JOBS
+                  value: "heat-db-sync,heat-ks-user,heat-trustee-ks-user,heat-domain-ks-user,heat-ks-endpoints"
+                - name: DEPENDENCY_DAEMONSET
+                  value: ""
+                - name: DEPENDENCY_CONTAINER
+                  value: ""
+                - name: DEPENDENCY_POD_JSON
+                  value: ""
+                - name: DEPENDENCY_CUSTOM_RESOURCE
+                  value: ""
+              command:
+                - kubernetes-entrypoint
+              volumeMounts:
+                null
+          containers:
+            - name: heat-purge-deleted
+              image: "docker.io/openstackhelm/heat:2023.1-ubuntu_jammy"
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 2000m
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 124Mi
+              command:
+                - /tmp/heat-purge-deleted-active.sh
+                - "60"
+              volumeMounts:
+              - name: pod-tmp
+                mountPath: /tmp
+              - name: heat-bin
+                mountPath: /tmp/heat-purge-deleted-active.sh
+                subPath: heat-purge-deleted-active.sh
+                readOnly: true
+              - name: etcheat
+                mountPath: /etc/heat
+              - name: heat-etc
+                mountPath: /etc/heat/heat.conf
+                subPath: heat.conf
+                readOnly: true
+              
+              - name: heat-etc
+                mountPath: /etc/heat/logging.conf
+                subPath: logging.conf
+                readOnly: true
+                                          
+
+          volumes:
+            - name: pod-tmp
+              emptyDir: {}
+            - name: etcheat
+              emptyDir: {}
+            - name: heat-etc
+              secret:
+                secretName: heat-etc
+                defaultMode: 0444                        
+            - name: heat-bin
+              configMap:
+                name: heat-bin
+                defaultMode: 0555

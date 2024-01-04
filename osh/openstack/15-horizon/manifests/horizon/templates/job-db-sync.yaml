@@ -1,0 +1,151 @@
+---
+# Source: horizon/templates/job-db-sync.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: horizon-db-sync
+  namespace: openstack
+---
+# Source: horizon/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: horizon-openstack-horizon-db-sync
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+---
+# Source: horizon/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: horizon-horizon-db-sync
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: horizon-openstack-horizon-db-sync
+subjects:
+  - kind: ServiceAccount
+    name: horizon-db-sync
+    namespace: openstack
+---
+# Source: horizon/templates/job-db-sync.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: horizon-db-sync
+  labels:
+    release_group: horizon
+    application: horizon
+    component: db-sync
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-4"
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: horizon
+        application: horizon
+        component: db-sync
+      annotations:
+        
+    spec:
+      serviceAccountName: horizon-db-sync
+      securityContext:
+        runAsUser: 42424
+      restartPolicy: OnFailure
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: horizon-db-sync
+          image: "docker.io/openstackhelm/horizon:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsUser: 0
+          command:
+            - /tmp/db-sync.sh
+          volumeMounts:
+          - name: horizon-etc
+            mountPath: /etc/openstack-dashboard/local_settings
+            subPath: local_settings
+            readOnly: true
+          - name: horizon-bin
+            mountPath: /tmp/db-sync.sh
+            subPath: db-sync.sh
+            readOnly: true
+          - name: horizon-bin
+            mountPath: /tmp/manage.py
+            subPath: manage.py
+            readOnly: true          
+
+      volumes:
+      - name: horizon-etc
+        secret:
+          secretName: horizon-etc
+          defaultMode: 0444
+      - name: horizon-bin
+        configMap:
+          name: horizon-bin
+          defaultMode: 0555

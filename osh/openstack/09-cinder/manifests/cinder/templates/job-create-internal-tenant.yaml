@@ -1,0 +1,231 @@
+---
+# Source: cinder/templates/job-create-internal-tenant.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cinder-create-internal-tenant
+  namespace: openstack
+---
+# Source: cinder/templates/job-create-internal-tenant.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cinder-openstack-cinder-create-internal-tenant
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+---
+# Source: cinder/templates/job-create-internal-tenant.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cinder-cinder-create-internal-tenant
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cinder-openstack-cinder-create-internal-tenant
+subjects:
+  - kind: ServiceAccount
+    name: cinder-create-internal-tenant
+    namespace: openstack
+---
+# Source: cinder/templates/job-create-internal-tenant.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "cinder-create-internal-tenant"
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    release_group: cinder
+    application: cinder
+    component: create-internal-tenant
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: cinder
+        application: cinder
+        component: create-internal-tenant
+      annotations:
+        
+    spec:
+      securityContext:
+        runAsUser: 42424
+      serviceAccountName: "cinder-create-internal-tenant"
+      restartPolicy: OnFailure
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:keystone-api"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: create-internal-tenant
+          image: docker.io/openstackhelm/heat:2023.1-ubuntu_jammy
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/create-internal-tenant.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: create-internal-tenant-sh
+              mountPath: /tmp/create-internal-tenant.sh
+              subPath: create-internal-tenant.sh
+              readOnly: true            
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+            - name: SERVICE_OS_SERVICE_NAME
+              value: "cinder"
+            - name: INTERNAL_PROJECT_NAME
+              value: "internal_cinder"
+            - name: INTERNAL_USER_NAME
+              value: "internal_cinder"            
+            - name: SERVICE_OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_REGION_NAME
+            - name: SERVICE_OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: SERVICE_OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_PROJECT_NAME
+            - name: SERVICE_OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_USER_DOMAIN_NAME
+            - name: SERVICE_OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_USERNAME
+            - name: SERVICE_OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinder-keystone-user
+                  key: OS_PASSWORD
+            - name: SERVICE_OS_ROLES
+              value: "admin,service"
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: create-internal-tenant-sh
+          configMap:
+            name: "cinder-bin"
+            defaultMode: 0555

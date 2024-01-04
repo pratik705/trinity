@@ -1,0 +1,15 @@
+---
+# Source: heat/templates/service-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: heat-api
+spec:
+  ports:
+    - name: h-api
+      port: 8004
+    
+  selector:
+    release_group: heat
+    application: heat
+    component: api

@@ -1,0 +1,15 @@
+---
+# Source: heat/templates/service-cfn.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: heat-cfn
+spec:
+  ports:
+    - name: h-cfn
+      port: 8000
+    
+  selector:
+    release_group: heat
+    application: heat
+    component: cfn

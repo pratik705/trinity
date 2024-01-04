@@ -1,0 +1,218 @@
+---
+# Source: glance/templates/job-bootstrap.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glance-bootstrap
+  namespace: openstack
+---
+# Source: glance/templates/job-bootstrap.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: glance-openstack-glance-bootstrap
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+---
+# Source: glance/templates/job-bootstrap.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: glance-glance-bootstrap
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: glance-openstack-glance-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: glance-bootstrap
+    namespace: openstack
+---
+# Source: glance/templates/job-bootstrap.yaml
+# The configFile path shouble be /etc/glance/glance-api.conf
+# not default /etc/glance/glance.conf defined by helm-toolkit,
+# since secrets mounted in '/etc/glance' have glance-api.conf not glance.conf in it.
+# The wrong path '/etc/glance/glance.conf' would be dir in bootstarp container,
+# and lead to all config files in '/etc/glance' dir unreachable.
+---
+# Source: glance/templates/job-bootstrap.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "glance-bootstrap"
+  labels:
+    release_group: glance
+    application: glance
+    component: bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+spec:
+  backoffLimit: 1000
+  template:
+    metadata:
+      labels:
+        release_group: glance
+        application: glance
+        component: bootstrap
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+    spec:
+      serviceAccountName: glance-bootstrap
+      restartPolicy: OnFailure
+            
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:keystone-api,openstack:glance-api"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: bootstrap
+          image: docker.io/openstackhelm/heat:wallaby-ubuntu_focal
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/bootstrap.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: bootstrap-sh
+              mountPath: /tmp/bootstrap.sh
+              subPath: bootstrap.sh
+              readOnly: true
+            - name: etc-service
+              mountPath: "/etc/glance"
+            - name: bootstrap-conf
+              mountPath: "/etc/glance/glance-api.conf"
+              subPath: "glance-api.conf"
+              readOnly: true
+            - name: bootstrap-conf
+              mountPath: "/etc/glance/logging.conf"
+              subPath: "logging.conf"
+              readOnly: true
+            
+            - mountPath: /tmp/images
+              name: imagedir
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: bootstrap-sh
+          configMap:
+            name: "glance-bin"
+            defaultMode: 0555
+        - name: etc-service
+          emptyDir: {}
+        - name: bootstrap-conf
+          secret:
+            secretName: "glance-etc"
+            defaultMode: 0444        
+        - emptyDir: {}
+          name: imagedir

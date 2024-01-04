@@ -1,0 +1,162 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/octavia/templates/configmap-bin.yaml
+- manifests/octavia/templates/deployment-api.yaml
+- manifests/octavia/templates/deployment-housekeeping.yaml
+- manifests/octavia/templates/deployment-worker.yaml
+- manifests/octavia/templates/encrypted-configmap-etc.yaml
+- manifests/octavia/templates/encrypted-secret-db.yaml
+- manifests/octavia/templates/encrypted-secret-keystone.yaml
+- manifests/octavia/templates/encrypted-secret-rabbitmq.yaml
+- manifests/octavia/templates/ingress-api.yaml
+- manifests/octavia/templates/job-bootstrap.yaml
+- manifests/octavia/templates/job-db-sync.yaml
+- manifests/octavia/templates/job-ks-endpoint.yaml
+- manifests/octavia/templates/job-ks-service.yaml
+- manifests/octavia/templates/job-ks-user.yaml
+- manifests/octavia/templates/network_policy.yaml
+- manifests/octavia/templates/pdb-api.yaml
+- manifests/octavia/templates/service-api.yaml
+- manifests/octavia/templates/service-ingress-api.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: octavia-bootstrap
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: octavia-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: octavia-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: octavia-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: octavia-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: octavia-worker
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: octavia-worker 
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: octavia-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: octavia-api
+    spec:
+      replicas: null
+# To run the OVN driver, the octavia-api container must have an agent container within the same pod.
+- target:
+    kind: Deployment
+    name: octavia-api
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers
+      value:
+      - name: octavia-agent
+        image: "ghcr.io/cloudnull/genestack/octavia-ovn:master-ubuntu_jammy"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        command:
+          - octavia-driver-agent
+          - --config-dir
+          - /etc/octavia/octavia.conf
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - /tmp/octavia-api.sh
+                - stop
+        ports:
+          - name: o-api
+            containerPort: 9876
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /
+            port: 9876
+        volumeMounts:
+          - name: pod-etc-octavia
+            mountPath: /etc/octavia
+          - name: octavia-bin
+            mountPath: /tmp/octavia-api.sh
+            subPath: octavia-api.sh
+            readOnly: true
+          - name: octavia-etc
+            mountPath: /etc/octavia/octavia.conf
+            subPath: octavia.conf
+            readOnly: true
+          - name: octavia-etc
+            mountPath: /etc/octavia/logging.conf
+            subPath: logging.conf
+            readOnly: true
+          - mountPath: /var/run/octavia
+            name: pod-run-octavia
+      - name: octavia-api
+        image: "ghcr.io/cloudnull/genestack/octavia-ovn:master-ubuntu_jammy"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        command:
+          - /tmp/octavia-api.sh
+          - start
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - /tmp/octavia-api.sh
+                - stop
+        ports:
+          - name: o-api
+            containerPort: 9876
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /
+            port: 9876
+        volumeMounts:
+          - name: pod-etc-octavia
+            mountPath: /etc/octavia
+          - name: octavia-bin
+            mountPath: /tmp/octavia-api.sh
+            subPath: octavia-api.sh
+            readOnly: true
+          - name: octavia-etc
+            mountPath: /etc/octavia/octavia.conf
+            subPath: octavia.conf
+            readOnly: true
+          - name: octavia-etc
+            mountPath: /etc/octavia/logging.conf
+            subPath: logging.conf
+            readOnly: true
+          - mountPath: /var/run/octavia
+            name: pod-run-octavia

@@ -1,0 +1,288 @@
+---
+# Source: cinder/templates/deployment-backup.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cinder-backup
+  namespace: openstack
+---
+# Source: cinder/templates/deployment-backup.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cinder-openstack-cinder-backup
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: cinder/templates/deployment-backup.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cinder-cinder-backup
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cinder-openstack-cinder-backup
+subjects:
+  - kind: ServiceAccount
+    name: cinder-backup
+    namespace: openstack
+---
+# Source: cinder/templates/deployment-backup.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cinder-backup
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: cinder
+    application: cinder
+    component: backup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: cinder
+      application: cinder
+      component: backup
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: cinder
+        application: cinder
+        component: backup
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "8c5986eba572d31613bd599cd0c2e58534fe29e89347669524ab59ddb7631397"
+        configmap-etc-hash: "2886f56fa94b290ce1c8c0ab21bc659460d8e452e68609800725c2b4153d877d"
+        
+    spec:
+      serviceAccountName: cinder-backup
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - cinder
+                  - key: application
+                    operator: In
+                    values:
+                    - cinder
+                  - key: component
+                    operator: In
+                    values:
+                    - backup
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:keystone-api,openstack:cinder-api"
+            - name: DEPENDENCY_JOBS
+              value: "cinder-db-sync,cinder-ks-user,cinder-ks-endpoints"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+        - name: ceph-keyring-placement-ceph-rbd
+          image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+          command:
+            - /tmp/ceph-keyring.sh
+          env:
+            - name: RBD_USER
+              value: "rbd-client"
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: etcceph
+              mountPath: /etc/ceph
+            - name: cinder-bin
+              mountPath: /tmp/ceph-keyring.sh
+              subPath: ceph-keyring.sh
+              readOnly: true
+            - name: ceph-keyring
+              mountPath: /tmp/client-keyring
+              subPath: key
+              readOnly: true
+        - name: ceph-coordination-volume-perms
+          image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+          command:
+            - chown
+            - -R
+            - "cinder:"
+            - /var/lib/cinder/coordination
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: cinder-coordination
+              mountPath: /var/lib/cinder/coordination
+        
+      containers:
+        - name: cinder-backup
+          image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            null
+          
+          securityContext:
+            capabilities:
+              add:
+              - SYS_ADMIN
+            privileged: true
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+          command:
+            - /tmp/cinder-backup.sh
+          terminationMessagePath: /var/log/termination-log
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: cinder-tmp
+              mountPath: /var/lib/cinder/tmp
+            - name: cinder-bin
+              mountPath: /tmp/cinder-backup.sh
+              subPath: cinder-backup.sh
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/cinder.conf
+              subPath: cinder.conf
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            
+            - name: etcceph
+              mountPath: /etc/ceph
+            - name: ceph-etc
+              mountPath: /etc/ceph/ceph.conf
+              subPath: ceph.conf
+              readOnly: true
+            - name: ceph-keyring
+              mountPath: /tmp/client-keyring
+              subPath: key
+              readOnly: true
+            - name: cinder-coordination
+              mountPath: /var/lib/cinder/coordination
+            - name: cinder-etc
+              # NOTE (Portdirect): We mount here to override Kollas
+              # custom sudoers file when using Kolla images, this
+              # location will also work fine for other images.
+              mountPath: /etc/sudoers.d/kolla_cinder_sudoers
+              subPath: cinder_sudoers
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/sudoers.d/kolla_cinder_volume_sudoers
+              subPath: cinder_sudoers
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/rootwrap.conf
+              subPath: rootwrap.conf
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/rootwrap.d/volume.filters
+              subPath: volume.filters
+              readOnly: true                        
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: cinder-tmp
+          emptyDir: {}
+        - name: cinder-etc
+          secret:
+            secretName: cinder-etc
+            defaultMode: 0444
+        - name: cinder-bin
+          configMap:
+            name: cinder-bin
+            defaultMode: 0555
+        
+        - name: etcceph
+          emptyDir: {}
+        - name: ceph-etc
+          configMap:
+            name: ceph-etc
+            defaultMode: 0444
+        
+        - name: ceph-keyring
+          secret:
+            secretName: "rbd-client1"
+        
+        # NOTE (portdirect): this will need to be set to a shared mount amongst all cinder
+        # pods for the coordination backend to be fully functional.
+        - name: cinder-coordination
+          emptyDir: {}

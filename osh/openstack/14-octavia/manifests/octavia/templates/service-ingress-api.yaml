@@ -1,0 +1,14 @@
+---
+# Source: octavia/templates/service-ingress-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: octavia
+spec:
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443
+  selector:
+    app: ingress-api

@@ -1,0 +1,230 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: neutron-netns-cleanup-cron
+  namespace: openstack
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  annotations:
+    openstackhelm.openstack.org/release_uuid: ''
+  labels:
+    application: neutron
+    component: netns-cleanup-cron
+    release_group: neutron
+  name: neutron-netns-cleanup-cron-default
+spec:
+  minReadySeconds: 0
+  selector:
+    matchLabels:
+      application: neutron
+      component: netns-cleanup-cron
+      release_group: neutron
+  template:
+    metadata:
+      annotations:
+        configmap-bin-hash: 3b17fadc4799090e9f5d65201d90080ae322cff710e2b448a8f9d2c92555a57d
+        configmap-etc-hash: 2591ac587e9ca429c5fd3404996ca3337d90e5be59c0ce3ce7a9ddf45298ca46
+        openstackhelm.openstack.org/release_uuid: ''
+      labels:
+        application: neutron
+        component: netns-cleanup-cron
+        release_group: neutron
+    spec:
+      containers:
+      - command:
+        - /tmp/neutron-netns-cleanup-cron.sh
+        env:
+        - name: OS_IDENTITY_API_VERSION
+          value: '3'
+        - name: OS_AUTH_URL
+          valueFrom:
+            secretKeyRef:
+              key: OS_AUTH_URL
+              name: neutron-keystone-admin
+        - name: OS_REGION_NAME
+          valueFrom:
+            secretKeyRef:
+              key: OS_REGION_NAME
+              name: neutron-keystone-admin
+        - name: OS_INTERFACE
+          valueFrom:
+            secretKeyRef:
+              key: OS_INTERFACE
+              name: neutron-keystone-admin
+        - name: OS_ENDPOINT_TYPE
+          valueFrom:
+            secretKeyRef:
+              key: OS_INTERFACE
+              name: neutron-keystone-admin
+        - name: OS_PROJECT_DOMAIN_NAME
+          valueFrom:
+            secretKeyRef:
+              key: OS_PROJECT_DOMAIN_NAME
+              name: neutron-keystone-admin
+        - name: OS_PROJECT_NAME
+          valueFrom:
+            secretKeyRef:
+              key: OS_PROJECT_NAME
+              name: neutron-keystone-admin
+        - name: OS_USER_DOMAIN_NAME
+          valueFrom:
+            secretKeyRef:
+              key: OS_USER_DOMAIN_NAME
+              name: neutron-keystone-admin
+        - name: OS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: OS_USERNAME
+              name: neutron-keystone-admin
+        - name: OS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: OS_PASSWORD
+              name: neutron-keystone-admin
+        - name: OS_DEFAULT_DOMAIN
+          valueFrom:
+            secretKeyRef:
+              key: OS_DEFAULT_DOMAIN
+              name: neutron-keystone-admin
+        image: docker.io/openstackhelm/neutron:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        name: neutron-netns-cleanup-cron
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 1024Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /tmp/neutron-netns-cleanup-cron.sh
+          name: neutron-bin
+          readOnly: true
+          subPath: neutron-netns-cleanup-cron.sh
+        - mountPath: /etc/neutron/neutron.conf
+          name: neutron-etc
+          readOnly: true
+          subPath: neutron.conf
+        - mountPath: /etc/neutron/logging.conf
+          name: neutron-etc
+          readOnly: true
+          subPath: logging.conf
+        - mountPath: /etc/neutron/dhcp_agent.ini
+          name: neutron-etc
+          readOnly: true
+          subPath: dhcp_agent.ini
+        - mountPath: /etc/neutron/l3_agent.ini
+          name: neutron-etc
+          readOnly: true
+          subPath: l3_agent.ini
+        - mountPath: /etc/sudoers.d/kolla_neutron_sudoers
+          name: neutron-etc
+          readOnly: true
+          subPath: neutron_sudoers
+        - mountPath: /etc/neutron/rootwrap.conf
+          name: neutron-etc
+          readOnly: true
+          subPath: rootwrap.conf
+        - mountPath: /etc/neutron/rootwrap.d/dhcp.filters
+          name: neutron-etc
+          readOnly: true
+          subPath: dhcp.filters
+        - mountPath: /etc/neutron/rootwrap.d/netns-cleanup.filters
+          name: neutron-etc
+          readOnly: true
+          subPath: netns-cleanup.filters
+        - mountPath: /etc/neutron/rootwrap.d/privsep.filters
+          name: neutron-etc
+          readOnly: true
+          subPath: privsep.filters
+        - mountPath: /lib/modules
+          name: libmodules
+          readOnly: true
+        - mountPath: /run/xtables.lock
+          name: iptables-lockfile
+        - mountPath: /var/lib/neutron/openstack-helm
+          name: socket
+        - mountPath: /run/netns
+          mountPropagation: Bidirectional
+          name: host-run-netns
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - command:
+        - kubernetes-entrypoint
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: INTERFACE_NAME
+          value: eth0
+        - name: PATH
+          value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+        - name: DEPENDENCY_SERVICE
+          value: ''
+        - name: DEPENDENCY_DAEMONSET
+          value: ''
+        - name: DEPENDENCY_CONTAINER
+          value: ''
+        - name: DEPENDENCY_POD_JSON
+          value: ''
+        - name: DEPENDENCY_CUSTOM_RESOURCE
+          value: ''
+        image: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
+        imagePullPolicy: IfNotPresent
+        name: init
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsUser: 65534
+        volumeMounts: null
+      nodeSelector:
+        openstack-control-plane: enabled
+      securityContext:
+        runAsUser: 42424
+      serviceAccountName: neutron-netns-cleanup-cron
+      shareProcessNamespace: true
+      volumes:
+      - emptyDir: {}
+        name: pod-tmp
+      - emptyDir: {}
+        name: pod-var-neutron
+      - configMap:
+          defaultMode: 365
+          name: neutron-bin
+        name: neutron-bin
+      - name: neutron-etc
+        secret:
+          defaultMode: 292
+          secretName: neutron-netns-cleanup-cron-default
+      - hostPath:
+          path: /lib/modules
+        name: libmodules
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: iptables-lockfile
+      - hostPath:
+          path: /var/lib/neutron/openstack-helm
+        name: socket
+      - hostPath:
+          path: /run/netns
+        name: host-run-netns
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate

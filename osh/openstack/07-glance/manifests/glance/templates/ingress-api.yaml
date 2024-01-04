@@ -1,0 +1,89 @@
+---
+# Source: glance/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: glance
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: glance-trinity.pbandark.com
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: glance
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: glance-api
+                port:
+                  name: "g-api"
+    - host: glance.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: glance-api
+                port:
+                  name: "g-api"
+    - host: glance.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: glance-api
+                port:
+                  name: "g-api"
+---
+# Source: glance/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: glance-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: glance-trinity.pbandark.com
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: glance-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: glance-api
+                port:
+                  name: "g-api"
+---
+# Source: glance/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: glance-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/server-alias: glance-trinity.pbandark.com
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: glance-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: glance-api
+                port:
+                  name: "g-api"

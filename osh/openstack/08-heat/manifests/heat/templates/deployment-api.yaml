@@ -1,0 +1,235 @@
+---
+# Source: heat/templates/deployment-api.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heat-api
+  namespace: openstack
+---
+# Source: heat/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: heat-openstack-heat-api
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: heat/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: heat-heat-api
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: heat-openstack-heat-api
+subjects:
+  - kind: ServiceAccount
+    name: heat-api
+    namespace: openstack
+---
+# Source: heat/templates/deployment-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heat-api
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: heat
+    application: heat
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: heat
+      application: heat
+      component: api
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: heat
+        application: heat
+        component: api
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "7901e74f0dc72b2f783cd1006eb04dc16ac091fe6f3485ce86361e5015cdfab7"
+        configmap-etc-hash: "049dfbdb84dbc324f08bc6393ceca4f17087649bbbffaa5721ca617475fc8df6"
+        
+    spec:
+      serviceAccountName: heat-api
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - heat
+                  - key: application
+                    operator: In
+                    values:
+                    - heat
+                  - key: component
+                    operator: In
+                    values:
+                    - api
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary,openstack:rabbitmq-nodes,openstack:keystone-api"
+            - name: DEPENDENCY_JOBS
+              value: "heat-db-sync,heat-ks-user,heat-trustee-ks-user,heat-domain-ks-user,heat-ks-endpoints,heat-bootstrap"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: heat-api
+          image: "docker.io/openstackhelm/heat:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/heat-api.sh
+            - start
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/heat-api.sh
+                  - stop
+          ports:
+            - name: h-api
+              containerPort: 8004
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8004
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8004
+            initialDelaySeconds: 30
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: pod-etc-heat
+              mountPath: /etc/heat
+            - name: wsgi-heat
+              mountPath: /var/www/cgi-bin/heat
+            - name: heat-bin
+              mountPath: /tmp/heat-api.sh
+              subPath: heat-api.sh
+              readOnly: true
+            - name: heat-etc
+              mountPath: /etc/heat/heat.conf
+              subPath: heat.conf
+              readOnly: true
+            
+            - name: heat-etc
+              mountPath: /etc/heat/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            
+            - name: heat-etc
+              mountPath: /etc/heat/api-paste.ini
+              subPath: api-paste.ini
+              readOnly: true
+            - name: heat-etc
+              mountPath: /etc/heat/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            - name: heat-etc
+              mountPath: /etc/heat/api_audit_map.conf
+              subPath: api_audit_map.conf
+              readOnly: true                        
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: pod-etc-heat
+          emptyDir: {}
+        - name: wsgi-heat
+          emptyDir: {}
+        - name: heat-bin
+          configMap:
+            name: heat-bin
+            defaultMode: 0555
+        - name: heat-etc
+          secret:
+            secretName: heat-etc
+            defaultMode: 0444

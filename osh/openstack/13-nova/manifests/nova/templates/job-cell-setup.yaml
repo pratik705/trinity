@@ -1,0 +1,266 @@
+---
+# Source: nova/templates/job-cell-setup.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-cell-setup
+  namespace: openstack
+---
+# Source: nova/templates/job-cell-setup.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: nova-cell-setup
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+---
+# Source: nova/templates/job-cell-setup.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nova-cell-setup
+subjects:
+  - kind: ServiceAccount
+    name: nova-cell-setup
+    namespace: openstack
+roleRef:
+  kind: ClusterRole
+  name: nova-cell-setup
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: nova/templates/job-cell-setup.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-openstack-nova-cell-setup
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - pods
+      - jobs
+      - pods
+---
+# Source: nova/templates/job-cell-setup.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-nova-cell-setup
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-openstack-nova-cell-setup
+subjects:
+  - kind: ServiceAccount
+    name: nova-cell-setup
+    namespace: openstack
+---
+# Source: nova/templates/job-cell-setup.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nova-cell-setup
+  labels:
+    release_group: nova
+    application: nova
+    component: cell-setup
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: nova
+        application: nova
+        component: cell-setup
+      annotations:
+        
+    spec:
+      serviceAccountName: nova-cell-setup
+      restartPolicy: OnFailure
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:rabbitmq-nodes,openstack:mariadb-galera-primary,openstack:keystone-api,openstack:nova-api"
+            - name: DEPENDENCY_JOBS
+              value: "nova-db-sync"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: "[{\"labels\":{\"application\":\"nova\",\"component\":\"compute\"},\"requireSameNode\":false}]"
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+        - name: nova-cell-setup-init
+          image: "docker.io/openstackhelm/heat:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: nova-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+          command:
+            - /tmp/cell-setup-init.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: nova-bin
+              mountPath: /tmp/cell-setup-init.sh
+              subPath: cell-setup-init.sh
+              readOnly: true            
+      containers:
+        - name: nova-cell-setup
+          image: "docker.io/openstackhelm/nova:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/cell-setup.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: nova-bin
+              mountPath: /tmp/cell-setup.sh
+              subPath: cell-setup.sh
+              readOnly: true
+            - name: etcnova
+              mountPath: /etc/nova
+            - name: nova-etc
+              mountPath: /etc/nova/nova.conf
+              subPath: nova.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/policy.yaml
+              subPath: policy.yaml
+              readOnly: true                        
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: etcnova
+          emptyDir: {}
+        - name: nova-etc
+          secret:
+            secretName: nova-etc
+            defaultMode: 0444
+        - name: nova-bin
+          configMap:
+            name: nova-bin
+            defaultMode: 0555

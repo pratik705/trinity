@@ -1,0 +1,14 @@
+---
+# Source: heat/templates/service-ingress-cfn.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudformation
+spec:
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443
+  selector:
+    app: ingress-api

@@ -1,0 +1,104 @@
+---
+# Source: horizon/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: horizon
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-name: GENESTACKCOOKIE
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: horizon
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: horizon-int
+                port:
+                  name: "web"
+    - host: horizon.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: horizon-int
+                port:
+                  name: "web"
+    - host: horizon.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: horizon-int
+                port:
+                  name: "web"
+---
+# Source: horizon/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: horizon-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-name: GENESTACKCOOKIE
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: horizon.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: horizon-int
+                port:
+                  name: "web"
+---
+# Source: horizon/templates/ingress-api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: horizon-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-name: GENESTACKCOOKIE
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: horizon.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: horizon-int
+                port:
+                  name: "web"

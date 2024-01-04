@@ -1,0 +1,15 @@
+---
+# Source: placement/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: placement-api
+spec:
+  ports:
+  - name: p-api
+    port: 8778
+    
+  selector:
+    release_group: placement
+    application: placement
+    component: api

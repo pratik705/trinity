@@ -1,0 +1,173 @@
+---
+# Source: octavia/templates/job-bootstrap.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: octavia-bootstrap
+  namespace: openstack
+---
+# Source: octavia/templates/job-bootstrap.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "octavia-bootstrap"
+  labels:
+    release_group: octavia
+    application: octavia
+    component: bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+spec:
+  backoffLimit: 1000
+  template:
+    metadata:
+      labels:
+        release_group: octavia
+        application: octavia
+        component: bootstrap
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+    spec:
+      serviceAccountName: octavia-bootstrap
+      restartPolicy: OnFailure
+            
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: ""
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: bootstrap
+          image: docker.io/openstackhelm/heat:2023.1-ubuntu_jammy
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: octavia-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/bootstrap.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: bootstrap-sh
+              mountPath: /tmp/bootstrap.sh
+              subPath: bootstrap.sh
+              readOnly: true
+            - name: etc-service
+              mountPath: "/etc/octavia"
+            - name: bootstrap-conf
+              mountPath: "/etc/octavia/octavia.conf"
+              subPath: "octavia.conf"
+              readOnly: true
+            - name: bootstrap-conf
+              mountPath: "/etc/octavia/logging.conf"
+              subPath: "logging.conf"
+              readOnly: true
+            
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: bootstrap-sh
+          configMap:
+            name: "octavia-bin"
+            defaultMode: 0555
+        - name: etc-service
+          emptyDir: {}
+        - name: bootstrap-conf
+          secret:
+            secretName: "octavia-etc"
+            defaultMode: 0444

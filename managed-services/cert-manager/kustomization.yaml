@@ -1,0 +1,15 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: cert-manager
+  includeCRDs: true
+  releaseName: cert-manager
+  valuesFile: values.yaml  
+  version: v1.13.2
+  repo: https://charts.jetstack.io
+resources:
+  - 'https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.crds.yaml'
+  - './rackspace-selfsigned-issuer.yaml'
+  - './rackspace-selfsigned-ca.yaml'  
+  - './rackspace-ca-issuer.yaml'

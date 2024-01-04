@@ -1,0 +1,41 @@
+---
+# Source: nova/templates/ingress-metadata.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metadata
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: metadata
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-metadata
+                port:
+                  name: "n-meta"
+    - host: metadata.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-metadata
+                port:
+                  name: "n-meta"
+    - host: metadata.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-metadata
+                port:
+                  name: "n-meta"

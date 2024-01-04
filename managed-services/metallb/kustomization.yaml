@@ -1,0 +1,13 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: metallb
+  includeCRDs: true
+  releaseName: metallb
+  version: 0.13.12
+  valuesFile: values.yaml 
+  repo: https://metallb.github.io/metallb
+resources:
+  - './IPAddressPool.yaml'
+  - './L2Advertisement.yaml'

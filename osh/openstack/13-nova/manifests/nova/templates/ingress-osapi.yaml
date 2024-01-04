@@ -1,0 +1,83 @@
+---
+# Source: nova/templates/ingress-osapi.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nova
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: nova
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-api
+                port:
+                  name: "n-api"
+    - host: nova.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-api
+                port:
+                  name: "n-api"
+    - host: nova.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-api
+                port:
+                  name: "n-api"
+---
+# Source: nova/templates/ingress-osapi.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nova-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: nova-api.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-api
+                port:
+                  name: "n-api"
+---
+# Source: nova/templates/ingress-osapi.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nova-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: nova-api.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-api
+                port:
+                  name: "n-api"

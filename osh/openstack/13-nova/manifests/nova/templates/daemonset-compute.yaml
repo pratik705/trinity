@@ -1,0 +1,371 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-compute
+  namespace: openstack
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-openstack-nova-compute
+  namespace: openstack
+rules:
+- apiGroups:
+  - ''
+  - extensions
+  - batch
+  - apps
+  resources:
+  - services
+  - endpoints
+  - pods
+  - jobs
+  - pods
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-nova-compute
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-openstack-nova-compute
+subjects:
+- kind: ServiceAccount
+  name: nova-compute
+  namespace: openstack
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  annotations:
+    openstackhelm.openstack.org/release_uuid: ''
+  labels:
+    application: nova
+    component: compute
+    release_group: nova
+  name: nova-compute-default
+spec:
+  minReadySeconds: 0
+  selector:
+    matchLabels:
+      application: nova
+      component: compute
+      release_group: nova
+  template:
+    metadata:
+      annotations:
+        configmap-bin-hash: c0731208acf9da1f9ec571309a6a67d14bf8940fee2f770cd1572c4b21f56bd1
+        configmap-etc-hash: 6c1531f286efe9929d1d56082826e742ef53ffe0d5d9d547e3b638eb86a55fb2
+        openstackhelm.openstack.org/release_uuid: ''
+      labels:
+        application: nova
+        component: compute
+        release_group: nova
+    spec:
+      containers:
+      - command:
+        - /tmp/nova-compute.sh
+        env:
+        - name: CEPH_CINDER_USER
+          value: rbd-client
+        - name: CEPH_CINDER_KEYRING
+          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+        - name: LIBVIRT_CEPH_SECRET_UUID
+          value: null
+        - name: RPC_PROBE_TIMEOUT
+          value: '60'
+        - name: RPC_PROBE_RETRIES
+          value: '2'
+        image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - /tmp/health-probe.py
+            - --config-file
+            - /etc/nova/nova.conf
+            - --service-queue-name
+            - compute
+            - --liveness-probe
+          initialDelaySeconds: 120
+          periodSeconds: 90
+          timeoutSeconds: 70
+        name: nova-compute
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - /tmp/health-probe.py
+            - --config-file
+            - /etc/nova/nova.conf
+            - --service-queue-name
+            - compute
+          initialDelaySeconds: 80
+          periodSeconds: 90
+          timeoutSeconds: 70
+        resources:
+          limits:
+            cpu: 10000m
+            memory: 6024Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: true
+        terminationMessagePath: /var/log/termination-log
+        volumeMounts:
+        - mountPath: /dev/pts
+          name: dev-pts
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /tmp/nova-compute.sh
+          name: nova-bin
+          readOnly: true
+          subPath: nova-compute.sh
+        - mountPath: /tmp/health-probe.py
+          name: nova-bin
+          readOnly: true
+          subPath: health-probe.py
+        - mountPath: /etc/nova/nova.conf
+          name: nova-etc
+          readOnly: true
+          subPath: nova-compute.conf
+        - mountPath: /etc/nova/logging.conf
+          name: nova-etc
+          readOnly: true
+          subPath: logging.conf
+        - mountPath: /etc/nova/api-paste.ini
+          name: nova-etc
+          readOnly: true
+          subPath: api-paste.ini
+        - mountPath: /etc/nova/policy.yaml
+          name: nova-etc
+          readOnly: true
+          subPath: policy.yaml
+        - mountPath: /etc/sudoers.d/kolla_nova_sudoers
+          name: nova-etc
+          readOnly: true
+          subPath: nova_sudoers
+        - mountPath: /etc/nova/rootwrap.conf
+          name: nova-etc
+          readOnly: true
+          subPath: rootwrap.conf
+        - mountPath: /etc/nova/rootwrap.d/compute.filters
+          name: nova-etc
+          readOnly: true
+          subPath: compute.filters
+        - mountPath: /etc/nova/rootwrap.d/network.filters
+          name: nova-etc
+          readOnly: true
+          subPath: network.filters
+        - mountPath: /etc/ceph
+          mountPropagation: Bidirectional
+          name: etcceph
+        - mountPath: /lib/modules
+          name: libmodules
+          readOnly: true
+        - mountPath: /var/lib/nova
+          mountPropagation: Bidirectional
+          name: varlibnova
+        - mountPath: /var/lib/libvirt
+          mountPropagation: Bidirectional
+          name: varliblibvirt
+        - mountPath: /run
+          name: run
+        - mountPath: /sys/fs/cgroup
+          name: cgroup
+          readOnly: true
+        - mountPath: /tmp/pod-shared
+          name: pod-shared
+        - mountPath: /etc/machine-id
+          name: machine-id
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostIPC: true
+      hostNetwork: true
+      hostPID: true
+      initContainers:
+      - command:
+        - kubernetes-entrypoint
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: INTERFACE_NAME
+          value: eth0
+        - name: PATH
+          value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+        - name: DEPENDENCY_SERVICE
+          value: openstack:rabbitmq-nodes,openstack:glance-api,openstack:nova-api,openstack:neutron-server,openstack:nova-metadata
+        - name: DEPENDENCY_JOBS
+          value: nova-db-sync
+        - name: DEPENDENCY_DAEMONSET
+          value: ''
+        - name: DEPENDENCY_CONTAINER
+          value: ''
+        - name: DEPENDENCY_POD_JSON
+          value: '[{"labels":{"application":"libvirt","component":"libvirt"},"requireSameNode":true}]'
+        - name: DEPENDENCY_CUSTOM_RESOURCE
+          value: ''
+        image: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
+        imagePullPolicy: IfNotPresent
+        name: init
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsUser: 65534
+        volumeMounts: null
+      - command:
+        - /tmp/nova-compute-init.sh
+        env:
+        - name: NOVA_USER_UID
+          value: '42424'
+        image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        name: nova-compute-init
+        securityContext:
+          readOnlyRootFilesystem: true
+          runAsUser: 0
+        terminationMessagePath: /var/log/termination-log
+        volumeMounts:
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /tmp/nova-compute-init.sh
+          name: nova-bin
+          readOnly: true
+          subPath: nova-compute-init.sh
+        - mountPath: /var/lib/nova
+          name: varlibnova
+        - mountPath: /tmp/pod-shared
+          name: pod-shared
+      - command:
+        - chown
+        - -R
+        - 'nova:'
+        - /etc/ceph
+        image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        name: ceph-perms
+        securityContext:
+          readOnlyRootFilesystem: true
+          runAsUser: 0
+        terminationMessagePath: /var/log/termination-log
+        volumeMounts:
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /etc/ceph
+          name: etcceph
+      - command:
+        - /tmp/ceph-keyring.sh
+        env:
+        - name: CEPH_CINDER_USER
+          value: rbd-client
+        - name: CEPH_CINDER_KEYRING
+          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+        - name: LIBVIRT_CEPH_SECRET_UUID
+          value: null
+        image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        name: ceph-keyring-placement
+        terminationMessagePath: /var/log/termination-log
+        volumeMounts:
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /etc/ceph
+          name: etcceph
+        - mountPath: /tmp/ceph-keyring.sh
+          name: nova-bin
+          subPath: ceph-keyring.sh
+        - mountPath: /etc/ceph/ceph.conf.template
+          name: ceph-etc
+          readOnly: true
+          subPath: ceph.conf
+      - command:
+        - /tmp/nova-console-compute-init.sh
+        image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy
+        imagePullPolicy: IfNotPresent
+        name: nova-compute-vnc-init
+        resources:
+          limits:
+            cpu: 10000m
+            memory: 6024Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        terminationMessagePath: /var/log/termination-log
+        volumeMounts:
+        - mountPath: /tmp
+          name: pod-tmp
+        - mountPath: /tmp/nova-console-compute-init.sh
+          name: nova-bin
+          readOnly: true
+          subPath: nova-console-compute-init.sh
+        - mountPath: /tmp/pod-shared
+          name: pod-shared
+      nodeSelector:
+        openstack-compute-node: enabled
+      securityContext:
+        runAsUser: 42424
+      serviceAccountName: nova-compute
+      volumes:
+      - emptyDir: {}
+        name: pod-tmp
+      - configMap:
+          defaultMode: 365
+          name: nova-bin
+        name: nova-bin
+      - name: nova-etc
+        secret:
+          defaultMode: 292
+          secretName: nova-compute-default
+      - hostPath:
+          path: /var/lib/openstack-helm/compute/nova
+        name: etcceph
+      - configMap:
+          defaultMode: 292
+          name: ceph-etc
+        name: ceph-etc
+      - hostPath:
+          path: /dev/pts
+        name: dev-pts
+      - hostPath:
+          path: /lib/modules
+        name: libmodules
+      - hostPath:
+          path: /var/lib/nova
+        name: varlibnova
+      - hostPath:
+          path: /var/lib/libvirt
+        name: varliblibvirt
+      - hostPath:
+          path: /run
+        name: run
+      - hostPath:
+          path: /sys/fs/cgroup
+        name: cgroup
+      - emptyDir: {}
+        name: pod-shared
+      - hostPath:
+          path: /etc/machine-id
+        name: machine-id
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate

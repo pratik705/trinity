@@ -1,0 +1,13 @@
+---
+# Source: keystone/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: keystone-api
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: keystone
+      application: keystone
+      component: api

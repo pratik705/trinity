@@ -1,0 +1,10 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: ingress-nginx
+  includeCRDs: true
+  valuesFile: values.yaml
+  releaseName: ingress-nginx
+  version: 4.8.1
+  repo: https://kubernetes.github.io/ingress-nginx

@@ -1,0 +1,18 @@
+apiVersion: v1
+data:
+  ceph.conf: |
+    [global]
+    cephx = true
+    cephx_cluster_require_signatures = true
+    cephx_require_signatures = false
+    cephx_service_require_signatures = false
+    debug_ms = 0/0
+    log_file = /dev/stdout
+    mon_cluster_log_file = /dev/stdout
+    mon_host = [v2:10.43.162.100:3300/0,v1:10.43.162.100:6789/0],[v2:10.43.67.202:3300/0,v1:10.43.67.202:6789/0],[v2:10.43.57.239:3300/0,v1:10.43.57.239:6789/0]
+    objecter_inflight_op_bytes = 1073741824
+    objecter_inflight_ops = 10240
+kind: ConfigMap
+metadata:
+  name: ceph-etc
+  namespace: openstack

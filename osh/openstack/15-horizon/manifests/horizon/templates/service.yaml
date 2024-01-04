@@ -1,0 +1,18 @@
+---
+# Source: horizon/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: horizon-int
+spec:
+  ports:
+    
+    - name: web
+      protocol: TCP
+      port: 80
+      targetPort: 80
+    
+  selector:
+    release_group: horizon
+    application: horizon
+    component: server

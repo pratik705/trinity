@@ -1,0 +1,15 @@
+---
+# Source: neutron/templates/service-server.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: neutron-server
+spec:
+  ports:
+    - name: q-api
+      port: 9696
+    
+  selector:
+    release_group: neutron
+    application: neutron
+    component: server

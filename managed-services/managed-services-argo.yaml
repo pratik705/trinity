@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: managed-services
+  namespace: rackspace-system
+spec:
+  generators:
+  - git:
+      repoURL: 'https://github.com/pratik705/trinity.git'
+      revision: HEAD
+      directories:
+      - path: managed-services/*
+      - path: managed-services/argocd
+        exclude: true
+  syncPolicy:
+    preserveResourcesOnDeletion: false
+    applicationsSync: sync
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      syncPolicy:
+        syncOptions:
+        - ServerSideApply=true
+        automated:
+          selfHeal: true            
+          prune: false
+        retry:
+          limit: -1
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m 
+
+      source:
+        repoURL: 'https://github.com/pratik705/trinity.git'
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: 'https://kubernetes.default.svc'

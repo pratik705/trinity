@@ -1,0 +1,10 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: sealed-secrets
+  includeCRDs: true
+  releaseName: sealed-secrets
+  valuesFile: values.yaml  
+  version: 2.13.4
+  repo: https://bitnami-labs.github.io/sealed-secrets

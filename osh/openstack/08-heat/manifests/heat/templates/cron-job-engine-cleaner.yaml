@@ -1,0 +1,175 @@
+---
+# Source: heat/templates/cron-job-engine-cleaner.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heat-engine-cleaner
+  namespace: openstack
+---
+# Source: heat/templates/cron-job-engine-cleaner.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: heat-openstack-heat-engine-cleaner
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: heat/templates/cron-job-engine-cleaner.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: heat-heat-engine-cleaner
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: heat-openstack-heat-engine-cleaner
+subjects:
+  - kind: ServiceAccount
+    name: heat-engine-cleaner
+    namespace: openstack
+---
+# Source: heat/templates/cron-job-engine-cleaner.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: heat-engine-cleaner
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  schedule: "*/5 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 600
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        release_group: heat
+        application: heat
+        component: engine-cleaner
+      annotations:
+        
+    spec:
+      template:
+        metadata:
+          labels:
+            release_group: heat
+            application: heat
+            component: engine-cleaner
+          annotations:
+            "openstackhelm.openstack.org/release_uuid": ""
+            configmap-bin-hash: "7901e74f0dc72b2f783cd1006eb04dc16ac091fe6f3485ce86361e5015cdfab7"
+            configmap-etc-hash: "049dfbdb84dbc324f08bc6393ceca4f17087649bbbffaa5721ca617475fc8df6"
+            
+        spec:
+          serviceAccountName: heat-engine-cleaner
+          securityContext:
+            runAsUser: 42424
+          restartPolicy: OnFailure
+
+          nodeSelector:
+            openstack-control-plane: enabled
+          initContainers:
+            
+            - name: init
+              image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+              imagePullPolicy: IfNotPresent  
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsUser: 65534
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.name
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      apiVersion: v1
+                      fieldPath: metadata.namespace
+                - name: INTERFACE_NAME
+                  value: eth0
+                - name: PATH
+                  value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+                - name: DEPENDENCY_SERVICE
+                  value: "openstack:mariadb-galera-primary,openstack:rabbitmq-nodes,openstack:keystone-api"
+                - name: DEPENDENCY_JOBS
+                  value: "heat-db-sync,heat-ks-user,heat-trustee-ks-user,heat-domain-ks-user,heat-ks-endpoints"
+                - name: DEPENDENCY_DAEMONSET
+                  value: ""
+                - name: DEPENDENCY_CONTAINER
+                  value: ""
+                - name: DEPENDENCY_POD_JSON
+                  value: ""
+                - name: DEPENDENCY_CUSTOM_RESOURCE
+                  value: ""
+              command:
+                - kubernetes-entrypoint
+              volumeMounts:
+                null
+          containers:
+            - name: heat-engine-cleaner
+              image: "docker.io/openstackhelm/heat:2023.1-ubuntu_jammy"
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 2000m
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+              
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+              command:
+                - /tmp/heat-engine-cleaner.sh
+              volumeMounts:
+              - name: pod-tmp
+                mountPath: /tmp
+              - name: heat-bin
+                mountPath: /tmp/heat-engine-cleaner.sh
+                subPath: heat-engine-cleaner.sh
+                readOnly: true
+              - name: etcheat
+                mountPath: /etc/heat
+              - name: heat-etc
+                mountPath: /etc/heat/heat.conf
+                subPath: heat.conf
+                readOnly: true
+              
+              - name: heat-etc
+                mountPath: /etc/heat/logging.conf
+                subPath: logging.conf
+                readOnly: true
+                                          
+
+          volumes:
+            - name: pod-tmp
+              emptyDir: {}
+            - name: etcheat
+              emptyDir: {}
+            - name: heat-etc
+              secret:
+                secretName: heat-etc
+                defaultMode: 0444                        
+            - name: heat-bin
+              configMap:
+                name: heat-bin
+                defaultMode: 0555
