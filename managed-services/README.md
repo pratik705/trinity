@@ -4,23 +4,12 @@ This page serves as an introduction to the services required to prepare a fresh 
 
 ## Included Services:
 
-1. **Namespace:**
-   - A dedicated space where supporting services will be installed.
-
-2. **Cert-Manager:**
-   - Manages the life cycle of certificates for consumption by the Kubernetes cluster.
-
-3. **MetalLB:**
-   - Provides load balancer services for the environment.
-
-4. **Sealedsecret:**
-   - Encrypts plain-text secrets, ensuring secure storage in a Git repository.
-
-5. **Ingress-Nginx:**
-   - Deploys an Ingress Controller, facilitating the creation of Ingress resources.
-
-6. **ArgoCD:**
-   - Enables the management of Kubernetes applications in a GitOps manner.
+1. **Namespace:** A dedicated space where supporting services will be installed.
+2. **Cert-Manager:** Manages the life cycle of certificates for consumption by the Kubernetes cluster.
+3. **MetalLB:** Provides load balancer services for the environment.
+4. **Sealed-secret:** Encrypts plain-text secrets, ensuring secure storage in a Git repository.
+5. **Ingress-Nginx:** Deploys an Ingress Controller, facilitating the creation of Ingress resources.
+6. **ArgoCD:** Enables the management of Kubernetes applications in a GitOps manner.
 
 ---
 

@@ -2,6 +2,8 @@
 
 This repository can be used to deploy [Rancher RKE2](https://docs.rke2.io/) Kubernetes clusters on bare metal or virtual machines. It utilizes the [lablabs/ansible-role-rke2](https://github.com/lablabs/ansible-role-rke2) Ansible role for the installation.
 
+---
+
 ## Prerequisites
 
 Before getting started, ensure the following prerequisites are met:
@@ -17,6 +19,8 @@ Note: The `--recurse-submodules` option is used to clone the repository along wi
 2. Update the `inventory.ini` file with details of the target nodes.
 3. Customize the `site.yaml` file with the necessary Ansible variables. Refer to the [role variables documentation](https://github.com/lablabs/ansible-role-rke2?tab=readme-ov-file#role-variables) for more information.
 
+---
+
 ## Installation
 
 - Make sure all nodes can be reached using Ansible:
@@ -28,6 +32,8 @@ ansible -i inventory.ini -m ping all
 ```bash
 ansible-playbook site.yaml -i inventory.ini
 ```
+
+---
 
 ## Validation
 
@@ -49,7 +55,9 @@ ceph-cap03     Ready    <none>                      4d18h   v1.26.11+rke2r1
 - Depending on the CNI selected, additional steps may be required to ensure Kubernetes is in a working state.
 - If using the `kube-ovn` CNI, follow the instructions in the next section.
 
-# kube-ovn CNI
+---
+
+## kube-ovn CNI
 
 To use kube-ovn as the CNI, follow these steps:
 
@@ -146,7 +154,9 @@ ovs-ovn-tk5ml                                           1/1     Running     0   
 ovs-ovn-zx68s                                           1/1     Running     1 (27h ago)   28h
 ```
 
-# Upgrade the RKE2 cluster
+---
+
+## Upgrade the RKE2 cluster
 
 To upgrade the RKE2 cluster, follow these steps:
 1. Define the `rke2_version` Ansible variable in the `site.yaml` file. You can choose the desired version from the [RKE2 releases](https://github.com/rancher/rke2/releases).
