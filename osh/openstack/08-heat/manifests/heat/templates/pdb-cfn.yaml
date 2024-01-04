@@ -1,0 +1,13 @@
+---
+# Source: heat/templates/pdb-cfn.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: heat-cfn
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: heat
+      application: heat
+      component: cfn

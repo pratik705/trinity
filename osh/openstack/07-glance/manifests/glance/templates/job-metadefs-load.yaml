@@ -1,0 +1,164 @@
+---
+# Source: glance/templates/job-metadefs-load.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glance-metadefs-load
+  namespace: openstack
+---
+# Source: glance/templates/job-metadefs-load.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: glance-openstack-glance-metadefs-load
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - jobs
+      - pods
+---
+# Source: glance/templates/job-metadefs-load.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: glance-glance-metadefs-load
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: glance-openstack-glance-metadefs-load
+subjects:
+  - kind: ServiceAccount
+    name: glance-metadefs-load
+    namespace: openstack
+---
+# Source: glance/templates/job-metadefs-load.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: glance-metadefs-load
+  labels:
+    release_group: glance
+    application: glance
+    component: metadefs-load
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: glance
+        application: glance
+        component: metadefs_load
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        
+    spec:
+      serviceAccountName: glance-metadefs-load
+      securityContext:
+        runAsUser: 42424
+      restartPolicy: OnFailure
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: ""
+            - name: DEPENDENCY_JOBS
+              value: "glance-db-sync"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: glance-metadefs-load
+          image: "docker.io/openstackhelm/glance:wallaby-ubuntu_focal"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - /tmp/metadefs-load.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: glance-bin
+              mountPath: /tmp/metadefs-load.sh
+              subPath: metadefs-load.sh
+              readOnly: true
+            - name: etcglance
+              mountPath: /etc/glance
+            - name: glance-etc
+              mountPath: /etc/glance/glance-api.conf
+              subPath: glance-api.conf
+              readOnly: true
+            - name: glance-etc
+              mountPath: /etc/glance/logging.conf
+              subPath: logging.conf
+              readOnly: true            
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: glance-bin
+          configMap:
+            name: glance-bin
+            defaultMode: 0555
+        - name: etcglance
+          emptyDir: {}
+        - name: glance-etc
+          secret:
+            secretName: glance-etc
+            defaultMode: 0444

@@ -1,0 +1,275 @@
+---
+# Source: nova/templates/deployment-novncproxy.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-novncproxy
+  namespace: openstack
+---
+# Source: nova/templates/deployment-novncproxy.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-openstack-nova-novncproxy
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: nova/templates/deployment-novncproxy.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-nova-novncproxy
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-openstack-nova-novncproxy
+subjects:
+  - kind: ServiceAccount
+    name: nova-novncproxy
+    namespace: openstack
+---
+# Source: nova/templates/deployment-novncproxy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-novncproxy
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: nova
+    application: nova
+    component: novnc-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: nova
+      application: nova
+      component: novnc-proxy
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: nova
+        application: nova
+        component: novnc-proxy
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "c0731208acf9da1f9ec571309a6a67d14bf8940fee2f770cd1572c4b21f56bd1"
+        configmap-etc-hash: "eaaacdc05c614c2e8c4bb19019c2bfdc5dd838f53d49d256ec41e15740a98b1f"
+        
+    spec:
+      serviceAccountName: nova-novncproxy
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - nova
+                  - key: application
+                    operator: In
+                    values:
+                    - nova
+                  - key: component
+                    operator: In
+                    values:
+                    - novnc-proxy
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary"
+            - name: DEPENDENCY_JOBS
+              value: "nova-db-sync"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+        - name: nova-novncproxy-init
+          image: "docker.io/openstackhelm/nova:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/nova-console-proxy-init.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: nova-bin
+              mountPath: /tmp/nova-console-proxy-init.sh
+              subPath: nova-console-proxy-init.sh
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/nova.conf
+              subPath: nova.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: pod-shared
+              mountPath: /tmp/pod-shared
+        - name: nova-novncproxy-init-assets
+          image: "docker.io/openstackhelm/nova:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/nova-console-proxy-init-assets.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: nova-bin
+              mountPath: /tmp/nova-console-proxy-init-assets.sh
+              subPath: nova-console-proxy-init-assets.sh
+              readOnly: true
+            - name: pod-usr-share-novnc
+              mountPath: /tmp/usr/share/novnc
+      containers:
+        - name: nova-novncproxy
+          image: "docker.io/openstackhelm/nova:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            tcpSocket:
+              port: 6080
+            timeoutSeconds: 15
+          readinessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            tcpSocket:
+              port: 6080
+            timeoutSeconds: 15
+          command:
+            - /tmp/nova-console-proxy.sh
+          ports:
+            - name: n-novnc
+              containerPort: 6080
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: nova-bin
+              mountPath: /tmp/nova-console-proxy.sh
+              subPath: nova-console-proxy.sh
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/nova.conf
+              subPath: nova.conf
+              readOnly: true
+            - name: nova-etc
+              mountPath: /etc/nova/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: pod-usr-share-novnc
+              mountPath: /usr/share/novnc
+              readOnly: true
+            - name: pod-shared
+              mountPath: /tmp/pod-shared                                                
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: nova-bin
+          configMap:
+            name: nova-bin
+            defaultMode: 0555
+        - name: nova-etc
+          secret:
+            secretName: nova-etc
+            defaultMode: 0444
+        - name: pod-usr-share-novnc
+          emptyDir: {}
+        - name: pod-shared
+          emptyDir: {}

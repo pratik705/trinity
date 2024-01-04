@@ -1,0 +1,13 @@
+---
+# Source: glance/templates/pdb-api.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: glance-api
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: glance
+      application: glance
+      component: api

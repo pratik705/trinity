@@ -1,0 +1,1091 @@
+---
+# Source: keystone/templates/configmap-bin.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keystone-bin
+data:
+  bootstrap.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    
+    # admin needs the admin role for the default domain
+    openstack role add \
+          --user="${OS_USERNAME}" \
+          --domain="${OS_DEFAULT_DOMAIN}" \
+          "admin"
+    
+    
+  rally-test.sh: |
+    #!/bin/bash
+    set -ex
+    
+    : "${RALLY_ENV_NAME:="openstack-helm"}"
+    : "${OS_INTERFACE:="public"}"
+    : "${RALLY_CLEANUP:="true"}"
+    
+    if [ "x$RALLY_CLEANUP" == "xtrue" ]; then
+      function rally_cleanup {
+        openstack user delete \
+            --domain="${SERVICE_OS_USER_DOMAIN_NAME}" \
+            "${SERVICE_OS_USERNAME}"
+        
+      }
+      trap rally_cleanup EXIT
+    fi
+    
+    function create_or_update_db () {
+      revisionResults=$(rally db revision)
+      if [ $revisionResults = "None"  ]
+      then
+        rally db create
+      else
+        rally db upgrade
+      fi
+    }
+    
+    create_or_update_db
+    
+    cat > /tmp/rally-config.json << EOF
+    {
+        "openstack": {
+            "auth_url": "${OS_AUTH_URL}",
+            "region_name": "${OS_REGION_NAME}",
+            "endpoint_type": "${OS_INTERFACE}",
+            "admin": {
+                "username": "${OS_USERNAME}",
+                "password": "${OS_PASSWORD}",
+                "user_domain_name": "${OS_USER_DOMAIN_NAME}",
+                "project_name": "${OS_PROJECT_NAME}",
+                "project_domain_name": "${OS_PROJECT_DOMAIN_NAME}"
+            },
+            "users": [
+                {
+                    "username": "${SERVICE_OS_USERNAME}",
+                    "password": "${SERVICE_OS_PASSWORD}",
+                    "project_name": "${SERVICE_OS_PROJECT_NAME}",
+                    "user_domain_name": "${SERVICE_OS_USER_DOMAIN_NAME}",
+                    "project_domain_name": "${SERVICE_OS_PROJECT_DOMAIN_NAME}"
+                }
+            ],
+            "https_insecure": false,
+            "https_cacert": "${OS_CACERT}"
+        }
+    }
+    EOF
+    rally deployment create --file /tmp/rally-config.json --name "${RALLY_ENV_NAME}"
+    rm -f /tmp/rally-config.json
+    rally deployment use "${RALLY_ENV_NAME}"
+    rally deployment check
+    rally task validate /etc/rally/rally_tests.yaml
+    rally task start /etc/rally/rally_tests.yaml
+    rally task sla-check
+    rally env cleanup
+    rally deployment destroy --deployment "${RALLY_ENV_NAME}"
+  ks-user.sh: |    
+    #!/bin/bash
+    
+    # Copyright 2017 Pete Birley
+    #
+    # Licensed under the Apache License, Version 2.0 (the "License");
+    # you may not use this file except in compliance with the License.
+    # You may obtain a copy of the License at
+    #
+    # http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+    
+    set -ex
+    
+    shopt -s nocasematch
+    
+    if [[ "${SERVICE_OS_PROJECT_DOMAIN_NAME}" == "Default" ]]
+    then
+      PROJECT_DOMAIN_ID="default"
+    else
+      # Manage project domain
+      PROJECT_DOMAIN_ID=$(openstack domain create --or-show --enable -f value -c id \
+        --description="Domain for ${SERVICE_OS_REGION_NAME}/${SERVICE_OS_PROJECT_DOMAIN_NAME}" \
+        "${SERVICE_OS_PROJECT_DOMAIN_NAME}")
+    fi
+    
+    if [[ "${SERVICE_OS_USER_DOMAIN_NAME}" == "Default" ]]
+    then
+      USER_DOMAIN_ID="default"
+    else
+      # Manage user domain
+      USER_DOMAIN_ID=$(openstack domain create --or-show --enable -f value -c id \
+        --description="Domain for ${SERVICE_OS_REGION_NAME}/${SERVICE_OS_USER_DOMAIN_NAME}" \
+        "${SERVICE_OS_USER_DOMAIN_NAME}")
+    fi
+    
+    shopt -u nocasematch
+    
+    # Manage user project
+    USER_PROJECT_DESC="Service Project for ${SERVICE_OS_REGION_NAME}/${SERVICE_OS_PROJECT_DOMAIN_NAME}"
+    USER_PROJECT_ID=$(openstack project create --or-show --enable -f value -c id \
+        --domain="${PROJECT_DOMAIN_ID}" \
+        --description="${USER_PROJECT_DESC}" \
+        "${SERVICE_OS_PROJECT_NAME}");
+    
+    # Manage user
+    USER_DESC="Service User for ${SERVICE_OS_REGION_NAME}/${SERVICE_OS_USER_DOMAIN_NAME}/${SERVICE_OS_SERVICE_NAME}"
+    USER_ID=$(openstack user create --or-show --enable -f value -c id \
+        --domain="${USER_DOMAIN_ID}" \
+        --project-domain="${PROJECT_DOMAIN_ID}" \
+        --project="${USER_PROJECT_ID}" \
+        --description="${USER_DESC}" \
+        "${SERVICE_OS_USERNAME}");
+    
+    # Manage user password (we do this in a seperate step to ensure the password is updated if required)
+    set +x
+    echo "Setting user password via: openstack user set --password=xxxxxxx ${USER_ID}"
+    openstack user set --password="${SERVICE_OS_PASSWORD}" "${USER_ID}"
+    set -x
+    
+    function ks_assign_user_role () {
+      if [[ "$SERVICE_OS_ROLE" == "admin" ]]
+      then
+        USER_ROLE_ID="$SERVICE_OS_ROLE"
+      else
+        USER_ROLE_ID=$(openstack role create --or-show -f value -c id "${SERVICE_OS_ROLE}");
+      fi
+    
+      # Manage user role assignment
+      openstack role add \
+          --user="${USER_ID}" \
+          --user-domain="${USER_DOMAIN_ID}" \
+          --project-domain="${PROJECT_DOMAIN_ID}" \
+          --project="${USER_PROJECT_ID}" \
+          "${USER_ROLE_ID}"
+    }
+    
+    # Manage user service role
+    IFS=','
+    for SERVICE_OS_ROLE in ${SERVICE_OS_ROLES}; do
+      ks_assign_user_role
+    done
+    
+    # Manage user member role
+    : ${MEMBER_OS_ROLE:="member"}
+    export USER_ROLE_ID=$(openstack role create --or-show -f value -c id \
+        "${MEMBER_OS_ROLE}");
+    ks_assign_user_role
+  cred-clean.py: |
+    
+    
+    #!/usr/bin/python
+    
+    # Drops db and user for an OpenStack Service:
+    # Set ROOT_DB_CONNECTION and DB_CONNECTION environment variables to contain
+    # SQLAlchemy strings for the root connection to the database and the one you
+    # wish the service to use. Alternatively, you can use an ini formatted config
+    # at the location specified by OPENSTACK_CONFIG_FILE, and extract the string
+    # from the key OPENSTACK_CONFIG_DB_KEY, in the section specified by
+    # OPENSTACK_CONFIG_DB_SECTION.
+    
+    import os
+    import sys
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    import logging
+    from sqlalchemy import create_engine
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm DB Drop')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    # Get the connection string for the service db root user
+    if "ROOT_DB_CONNECTION" in os.environ:
+        db_connection = os.environ['ROOT_DB_CONNECTION']
+        logger.info('Got DB root connection')
+    else:
+        logger.critical('environment variable ROOT_DB_CONNECTION not set')
+        sys.exit(1)
+    
+    mysql_x509 = os.getenv('MARIADB_X509', "")
+    ssl_args = {}
+    if mysql_x509:
+        ssl_args = {'ssl': {'ca': '/etc/mysql/certs/ca.crt',
+                            'key': '/etc/mysql/certs/tls.key',
+                            'cert': '/etc/mysql/certs/tls.crt'}}
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical(
+                'environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical(
+                "Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical(
+            'Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # Root DB engine
+    try:
+        root_engine_full = create_engine(db_connection)
+        root_user = root_engine_full.url.username
+        root_password = root_engine_full.url.password
+        drivername = root_engine_full.url.drivername
+        host = root_engine_full.url.host
+        port = root_engine_full.url.port
+        root_engine_url = ''.join([drivername, '://', root_user, ':',
+                                   root_password, '@', host, ':', str(port)])
+        root_engine = create_engine(root_engine_url, connect_args=ssl_args)
+        connection = root_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1} as {2}".format(
+            host, port, root_user))
+    except:
+        logger.critical('Could not connect to database as root user')
+        raise
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn, connect_args=ssl_args)
+        # Get our user data out of the user_engine
+        database = user_engine.url.database
+        user = user_engine.url.username
+        password = user_engine.url.password
+        logger.info('Got user db config')
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Delete all entries from credential table
+    
+    try:
+        cmd = "DELETE FROM credential"
+        user_engine.execute(cmd)
+        logger.info('Deleted all entries in credential table')
+    except:
+        logger.critical('Failed to clean up credential table in keystone db')
+        raise
+    
+    logger.info('Finished DB Management')
+    
+  db-init.py: |    
+    #!/usr/bin/env python
+    
+    # Creates db and user for an OpenStack Service:
+    # Set ROOT_DB_CONNECTION and DB_CONNECTION environment variables to contain
+    # SQLAlchemy strings for the root connection to the database and the one you
+    # wish the service to use. Alternatively, you can use an ini formatted config
+    # at the location specified by OPENSTACK_CONFIG_FILE, and extract the string
+    # from the key OPENSTACK_CONFIG_DB_KEY, in the section specified by
+    # OPENSTACK_CONFIG_DB_SECTION.
+    
+    import os
+    import sys
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    import logging
+    from sqlalchemy import create_engine
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm DB Init')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    # Get the connection string for the service db root user
+    if "ROOT_DB_CONNECTION" in os.environ:
+        db_connection = os.environ['ROOT_DB_CONNECTION']
+        logger.info('Got DB root connection')
+    else:
+        logger.critical('environment variable ROOT_DB_CONNECTION not set')
+        sys.exit(1)
+    
+    mysql_x509 = os.getenv('MARIADB_X509', "")
+    ssl_args = {}
+    if mysql_x509:
+        ssl_args = {'ssl': {'ca': '/etc/mysql/certs/ca.crt',
+                    'key': '/etc/mysql/certs/tls.key',
+                    'cert': '/etc/mysql/certs/tls.crt'}}
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical("Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical('Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # Root DB engine
+    try:
+        root_engine_full = create_engine(db_connection)
+        root_user = root_engine_full.url.username
+        root_password = root_engine_full.url.password
+        drivername = root_engine_full.url.drivername
+        host = root_engine_full.url.host
+        port = root_engine_full.url.port
+        root_engine_url = ''.join([drivername, '://', root_user, ':', root_password, '@', host, ':', str (port)])
+        root_engine = create_engine(root_engine_url, connect_args=ssl_args)
+        connection = root_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1} as {2}".format(
+            host, port, root_user))
+    except:
+        logger.critical('Could not connect to database as root user')
+        raise
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn, connect_args=ssl_args)
+        # Get our user data out of the user_engine
+        database = user_engine.url.database
+        user = user_engine.url.username
+        password = user_engine.url.password
+        logger.info('Got user db config')
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Create DB
+    try:
+        root_engine.execute("CREATE DATABASE IF NOT EXISTS {0}".format(database))
+        logger.info("Created database {0}".format(database))
+    except:
+        logger.critical("Could not create database {0}".format(database))
+        raise
+    
+    # Create DB User
+    try:
+        root_engine.execute(
+            "CREATE USER IF NOT EXISTS \'{0}\'@\'%%\' IDENTIFIED BY \'{1}\' {2}".format(
+                user, password, mysql_x509))
+        root_engine.execute(
+            "GRANT ALL ON `{0}`.* TO \'{1}\'@\'%%\'".format(database, user))
+        logger.info("Created user {0} for {1}".format(user, database))
+    except:
+        logger.critical("Could not create user {0} for {1}".format(user, database))
+        raise
+    
+    # Test connection
+    try:
+        connection = user_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1}/{2} as {3}".format(
+            host, port, database, user))
+    except:
+        logger.critical('Could not connect to database as user')
+        raise
+    
+    logger.info('Finished DB Management')
+  db-sync.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    
+    keystone-manage --config-file=/etc/keystone/keystone.conf db_sync
+    keystone-manage --config-file=/etc/keystone/keystone.conf bootstrap \
+        --bootstrap-username ${OS_USERNAME} \
+        --bootstrap-password ${OS_PASSWORD} \
+        --bootstrap-project-name ${OS_PROJECT_NAME} \
+        --bootstrap-admin-url ${OS_BOOTSTRAP_ADMIN_URL} \
+        --bootstrap-public-url ${OS_BOOTSTRAP_PUBLIC_URL} \
+        --bootstrap-internal-url ${OS_BOOTSTRAP_INTERNAL_URL} \
+        --bootstrap-region-id ${OS_REGION_NAME}
+    
+    exec python /tmp/endpoint-update.py
+    
+  db-drop.py: |    
+    #!/usr/bin/env python
+    
+    # Drops db and user for an OpenStack Service:
+    # Set ROOT_DB_CONNECTION and DB_CONNECTION environment variables to contain
+    # SQLAlchemy strings for the root connection to the database and the one you
+    # wish the service to use. Alternatively, you can use an ini formatted config
+    # at the location specified by OPENSTACK_CONFIG_FILE, and extract the string
+    # from the key OPENSTACK_CONFIG_DB_KEY, in the section specified by
+    # OPENSTACK_CONFIG_DB_SECTION.
+    
+    import os
+    import sys
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    import logging
+    from sqlalchemy import create_engine
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm DB Drop')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    # Get the connection string for the service db root user
+    if "ROOT_DB_CONNECTION" in os.environ:
+        db_connection = os.environ['ROOT_DB_CONNECTION']
+        logger.info('Got DB root connection')
+    else:
+        logger.critical('environment variable ROOT_DB_CONNECTION not set')
+        sys.exit(1)
+    
+    mysql_x509 = os.getenv('MARIADB_X509', "")
+    ssl_args = {}
+    if mysql_x509:
+        ssl_args = {'ssl': {'ca': '/etc/mysql/certs/ca.crt',
+                            'key': '/etc/mysql/certs/tls.key',
+                            'cert': '/etc/mysql/certs/tls.crt'}}
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical("Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical('Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # Root DB engine
+    try:
+        root_engine_full = create_engine(db_connection)
+        root_user = root_engine_full.url.username
+        root_password = root_engine_full.url.password
+        drivername = root_engine_full.url.drivername
+        host = root_engine_full.url.host
+        port = root_engine_full.url.port
+        root_engine_url = ''.join([drivername, '://', root_user, ':', root_password, '@', host, ':', str (port)])
+        root_engine = create_engine(root_engine_url, connect_args=ssl_args)
+        connection = root_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1} as {2}".format(
+            host, port, root_user))
+    except:
+        logger.critical('Could not connect to database as root user')
+        raise
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn, connect_args=ssl_args)
+        # Get our user data out of the user_engine
+        database = user_engine.url.database
+        user = user_engine.url.username
+        password = user_engine.url.password
+        logger.info('Got user db config')
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Delete DB
+    try:
+        root_engine.execute("DROP DATABASE IF EXISTS {0}".format(database))
+        logger.info("Deleted database {0}".format(database))
+    except:
+        logger.critical("Could not drop database {0}".format(database))
+        raise
+    
+    # Delete DB User
+    try:
+        root_engine.execute("DROP USER IF EXISTS {0}".format(user))
+        logger.info("Deleted user {0}".format(user))
+    except:
+        logger.critical("Could not delete user {0}".format(user))
+        raise
+    
+    logger.info('Finished DB Management')
+  keystone-api.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    
+    COMMAND="${@:-start}"
+    
+    function start () {
+    
+      for KEYSTONE_WSGI_SCRIPT in keystone-wsgi-public; do
+        cp -a $(type -p ${KEYSTONE_WSGI_SCRIPT}) /var/www/cgi-bin/keystone/
+      done
+    
+      if [ -f /etc/apache2/envvars ]; then
+         # Loading Apache2 ENV variables
+         source /etc/apache2/envvars
+      fi
+    
+      if [ -f /var/run/apache2/apache2.pid ]; then
+         # Remove the stale pid for debian/ubuntu images
+         rm -f /var/run/apache2/apache2.pid
+      fi
+    
+      # Start Apache2
+      exec apache2 -DFOREGROUND
+    }
+    
+    function stop () {
+      if [ -f /etc/apache2/envvars ]; then
+         # Loading Apache2 ENV variables
+         source /etc/apache2/envvars
+      fi
+      apache2 -k graceful-stop
+    }
+    
+    $COMMAND
+    
+  endpoint-update.py: |
+    #!/usr/bin/env python
+    import os
+    import logging
+    import sys
+    
+    from sqlalchemy import create_engine
+    
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm Keystone Endpoint management')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical(
+                'environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical(
+                "Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical(
+            'Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn)
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Set Internal Endpoint
+    try:
+        endpoint_url = os.environ['OS_BOOTSTRAP_INTERNAL_URL']
+        region_id = os.environ['OS_REGION_NAME']
+        cmd = ("update endpoint set url = %s where interface ='internal' and "
+               "service_id = (select id from service where "
+               "service.type = 'identity') and "
+               "region_id = %s")
+        user_engine.execute(cmd, (endpoint_url,region_id))
+    except:
+        logger.critical("Could not update internal endpoint")
+        raise
+    
+    # Set Admin Endpoint
+    try:
+        endpoint_url = os.environ['OS_BOOTSTRAP_ADMIN_URL']
+        region_id = os.environ['OS_REGION_NAME']
+        cmd = ("update endpoint set url = %s where interface ='admin' "
+               "and service_id = (select id from service where "
+               "service.type = 'identity') "
+               "and region_id = %s")
+        user_engine.execute(cmd, (endpoint_url,region_id))
+    except:
+        logger.critical("Could not update admin endpoint")
+        raise
+    
+    # Set Public Endpoint
+    try:
+        endpoint_url = os.environ['OS_BOOTSTRAP_PUBLIC_URL']
+        region_id = os.environ['OS_REGION_NAME']
+        cmd = ("update endpoint set url = %s where interface ='public' "
+               "and service_id = (select id from service where "
+               "service.type = 'identity') "
+               "and region_id = %s")
+        user_engine.execute(cmd, (endpoint_url,region_id))
+    except:
+        logger.critical("Could not update public endpoint")
+        raise
+    
+    # Print endpoints
+    try:
+        endpoints = user_engine.execute(
+            ("select interface, url from endpoint where service_id = "
+             "(select id from service where service.type = 'identity')")
+        ).fetchall()
+        for row in endpoints:
+            logger.info("endpoint ({0}): {1}".format(row[0], row[1]))
+    except:
+        logger.critical("Could not update endpoint")
+        raise
+    
+    logger.info('Finished Endpoint Management')
+    
+  fernet-manage.py: |
+    #!/usr/bin/env python
+    
+    
+    
+    import argparse
+    import base64
+    import errno
+    import grp
+    import logging
+    import os
+    import pwd
+    import re
+    import subprocess  #nosec
+    import sys
+    import time
+    
+    import requests
+    
+    FERNET_DIR = os.environ['KEYSTONE_KEYS_REPOSITORY']
+    KEYSTONE_USER = os.environ['KEYSTONE_USER']
+    KEYSTONE_GROUP = os.environ['KEYSTONE_GROUP']
+    NAMESPACE = os.environ['KUBERNETES_NAMESPACE']
+    
+    # k8s connection data
+    KUBE_HOST = None
+    KUBE_CERT = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+    KUBE_TOKEN = None
+    
+    LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+    LOG_FORMAT = "%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s"
+    logging.basicConfig(format=LOG_FORMAT, datefmt=LOG_DATEFMT)
+    LOG = logging.getLogger(__name__)
+    LOG.setLevel(logging.INFO)
+    
+    
+    def read_kube_config():
+        global KUBE_HOST, KUBE_TOKEN
+        KUBE_HOST = "https://%s:%s" % ('kubernetes.default',
+                                       os.environ['KUBERNETES_SERVICE_PORT'])
+        with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as f:
+            KUBE_TOKEN = f.read()
+    
+    
+    def get_secret_definition(name):
+        url = '%s/api/v1/namespaces/%s/secrets/%s' % (KUBE_HOST, NAMESPACE, name)
+        resp = requests.get(url,
+                            headers={'Authorization': 'Bearer %s' % KUBE_TOKEN},
+                            verify=KUBE_CERT)
+        if resp.status_code != 200:
+            LOG.error('Cannot get secret %s.', name)
+            LOG.error(resp.text)
+            return None
+        return resp.json()
+    
+    
+    def update_secret(name, secret):
+        url = '%s/api/v1/namespaces/%s/secrets/%s' % (KUBE_HOST, NAMESPACE, name)
+        resp = requests.put(url,
+                            json=secret,
+                            headers={'Authorization': 'Bearer %s' % KUBE_TOKEN},
+                            verify=KUBE_CERT)
+        if resp.status_code != 200:
+            LOG.error('Cannot update secret %s.', name)
+            LOG.error(resp.text)
+            return False
+        return True
+    
+    
+    def read_from_files():
+        keys = [name for name in os.listdir(FERNET_DIR) if os.path.isfile(FERNET_DIR + name)
+                and re.match("^\d+$", name)]
+        data = {}
+        for key in keys:
+            with open(FERNET_DIR + key, 'r') as f:
+                data[key] = f.read()
+        if len(list(keys)):
+            LOG.debug("Keys read from files: %s", keys)
+        else:
+            LOG.warning("No keys were read from files.")
+        return data
+    
+    
+    def get_keys_data():
+        keys = read_from_files()
+        return dict([(key, base64.b64encode(value.encode()).decode())
+                    for (key, value) in keys.items()])
+    
+    
+    def write_to_files(data):
+        if not os.path.exists(os.path.dirname(FERNET_DIR)):
+            try:
+                os.makedirs(os.path.dirname(FERNET_DIR))
+            except OSError as exc: # Guard against race condition
+                if exc.errno != errno.EEXIST:
+                    raise
+            uid = pwd.getpwnam(KEYSTONE_USER).pw_uid
+            gid = grp.getgrnam(KEYSTONE_GROUP).gr_gid
+            os.chown(FERNET_DIR, uid, gid)
+    
+        for (key, value) in data.items():
+            with open(FERNET_DIR + key, 'w') as f:
+                decoded_value = base64.b64decode(value).decode()
+                f.write(decoded_value)
+                LOG.debug("Key %s: %s", key, decoded_value)
+        LOG.info("%s keys were written", len(data))
+    
+    
+    def execute_command(cmd):
+        LOG.info("Executing 'keystone-manage %s --keystone-user=%s "
+                 "--keystone-group=%s' command.",
+                 cmd, KEYSTONE_USER, KEYSTONE_GROUP)
+        subprocess.call(['keystone-manage', cmd,  #nosec
+                         '--keystone-user=%s' % KEYSTONE_USER,
+                         '--keystone-group=%s' % KEYSTONE_GROUP])
+    
+    def main():
+        parser = argparse.ArgumentParser()
+        parser.add_argument('command', choices=['fernet_setup', 'fernet_rotate',
+                                                'credential_setup',
+                                                'credential_rotate'])
+        args = parser.parse_args()
+    
+        is_credential = args.command.startswith('credential')
+    
+        SECRET_NAME = ('keystone-credential-keys' if is_credential else
+                       'keystone-fernet-keys')
+    
+        read_kube_config()
+        secret = get_secret_definition(SECRET_NAME)
+        if not secret:
+            LOG.error("Secret '%s' does not exist.", SECRET_NAME)
+            sys.exit(1)
+    
+        if args.command in ('fernet_rotate', 'credential_rotate'):
+            LOG.info("Copying existing %s keys from secret '%s' to %s.",
+                     'credential' if is_credential else 'fernet', SECRET_NAME,
+                     FERNET_DIR)
+            write_to_files(secret['data'])
+    
+        if args.command in ('credential_setup', 'fernet_setup'):
+            if secret.get('data', False):
+                LOG.info('Keys already exist, skipping setup...')
+                sys.exit(0)
+    
+        execute_command(args.command)
+    
+        LOG.info("Updating data for '%s' secret.", SECRET_NAME)
+        updated_keys = get_keys_data()
+        secret['data'] = updated_keys
+        if not update_secret(SECRET_NAME, secret):
+            sys.exit(1)
+        LOG.info("%s fernet keys have been placed to secret '%s'",
+                 len(updated_keys), SECRET_NAME)
+        LOG.debug("Placed keys: %s", updated_keys)
+        LOG.info("%s keys %s has been completed",
+                 "Credential" if is_credential else 'Fernet',
+                 "rotation" if args.command.endswith('_rotate') else "generation")
+    
+        if args.command == 'credential_rotate':
+            # `credential_rotate` needs doing `credential_migrate` as well once all
+            # of the nodes have the new keys. So we'll sleep configurable amount of
+            # time to make sure k8s reloads the secrets in all pods and then
+            # execute `credential_migrate`.
+    
+            migrate_wait = int(os.getenv('KEYSTONE_CREDENTIAL_MIGRATE_WAIT', "60"))
+            LOG.info("Waiting %d seconds to execute `credential_migrate`.",
+                     migrate_wait)
+            time.sleep(migrate_wait)
+    
+            execute_command('credential_migrate')
+    
+    if __name__ == "__main__":
+        main()
+    
+  domain-manage-init.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    
+  domain-manage.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -e
+    endpt=http://keystone-api.openstack.svc.cluster.local:5000/v3
+    path=/etc/keystone/domains
+    
+  domain-manage.py: |
+    #!/usr/bin/python
+    
+    
+    import json
+    import os
+    import requests
+    import sys
+    
+    def main(args):
+        base_url, token, domainId, filename = args[1], args[2], args[3], args[5]
+        url = "%s/domains/%s/config" % (base_url, domainId)
+        print("Connecting to url: %r" % url)
+    
+        headers = {
+            'Content-Type': "application/json",
+            'X-Auth-Token': token,
+            'Cache-Control': "no-cache"
+        }
+    
+        verify = os.getenv('OS_CACERT', True)
+    
+        response = requests.request("GET", url, headers=headers, verify=verify)
+    
+        if response.status_code == 404:
+            print("domain config not found - put")
+            action = "PUT"
+        else:
+            print("domain config found - patch")
+            action = "PATCH"
+    
+        with open(filename, "rb") as f:
+            data = {"config": json.load(f)}
+    
+        response = requests.request(action, url,
+                                    data=json.dumps(data),
+                                    headers=headers, verify=verify)
+    
+        print("Response code on action [%s]: %s" % (action, response.status_code))
+        # Put and Patch can return 200 or 201. If it is not a 2XX code, error out.
+        if (response.status_code // 100) != 2:
+            sys.exit(1)
+    
+    
+    if __name__ == "__main__":
+        if len(sys.argv) != 6:
+            sys.exit(1)
+        main(sys.argv)
+    
+  rabbit-init.sh: |    
+    #!/bin/bash
+    set -e
+    # Extract connection details
+    RABBIT_HOSTNAME=$(echo "${RABBITMQ_ADMIN_CONNECTION}" | \
+      awk -F'[@]' '{print $2}' | \
+      awk -F'[:/]' '{print $1}')
+    RABBIT_PORT=$(echo "${RABBITMQ_ADMIN_CONNECTION}" | \
+      awk -F'[@]' '{print $2}' | \
+      awk -F'[:/]' '{print $2}')
+    
+    # Extract Admin User creadential
+    RABBITMQ_ADMIN_USERNAME=$(echo "${RABBITMQ_ADMIN_CONNECTION}" | \
+      awk -F'[@]' '{print $1}' | \
+      awk -F'[//:]' '{print $4}')
+    RABBITMQ_ADMIN_PASSWORD=$(echo "${RABBITMQ_ADMIN_CONNECTION}" | \
+      awk -F'[@]' '{print $1}' | \
+      awk -F'[//:]' '{print $5}')
+    
+    # Extract User creadential
+    RABBITMQ_USERNAME=$(echo "${RABBITMQ_USER_CONNECTION}" | \
+      awk -F'[@]' '{print $1}' | \
+      awk -F'[//:]' '{print $4}')
+    RABBITMQ_PASSWORD=$(echo "${RABBITMQ_USER_CONNECTION}" | \
+      awk -F'[@]' '{print $1}' | \
+      awk -F'[//:]' '{print $5}')
+    
+    # Extract User vHost
+    RABBITMQ_VHOST=$(echo "${RABBITMQ_USER_CONNECTION}" | \
+      awk -F'[@]' '{print $2}' | \
+      awk -F'[:/]' '{print $3}')
+    # Resolve vHost to / if no value is set
+    RABBITMQ_VHOST="${RABBITMQ_VHOST:-/}"
+    
+    function rabbitmqadmin_cli () {
+      if [ -n "$RABBITMQ_X509" ]
+      then
+        rabbitmqadmin \
+          --ssl \
+          --ssl-disable-hostname-verification \
+          --ssl-ca-cert-file="${USER_CERT_PATH}/ca.crt" \
+          --ssl-cert-file="${USER_CERT_PATH}/tls.crt" \
+          --ssl-key-file="${USER_CERT_PATH}/tls.key" \
+          --host="${RABBIT_HOSTNAME}" \
+          --port="${RABBIT_PORT}" \
+          --username="${RABBITMQ_ADMIN_USERNAME}" \
+          --password="${RABBITMQ_ADMIN_PASSWORD}" \
+          ${@}
+      else
+        rabbitmqadmin \
+          --host="${RABBIT_HOSTNAME}" \
+          --port="${RABBIT_PORT}" \
+          --username="${RABBITMQ_ADMIN_USERNAME}" \
+          --password="${RABBITMQ_ADMIN_PASSWORD}" \
+          ${@}
+      fi
+    }
+    
+    echo "Managing: User: ${RABBITMQ_USERNAME}"
+    rabbitmqadmin_cli \
+      declare user \
+      name="${RABBITMQ_USERNAME}" \
+      password="${RABBITMQ_PASSWORD}" \
+      tags="user"
+    
+    echo "Deleting Guest User"
+    rabbitmqadmin_cli \
+      delete user \
+      name="guest" || true
+    
+    if [ "${RABBITMQ_VHOST}" != "/" ]
+    then
+      echo "Managing: vHost: ${RABBITMQ_VHOST}"
+      rabbitmqadmin_cli \
+        declare vhost \
+        name="${RABBITMQ_VHOST}"
+    else
+      echo "Skipping root vHost declaration: vHost: ${RABBITMQ_VHOST}"
+    fi
+    
+    echo "Managing: Permissions: ${RABBITMQ_USERNAME} on ${RABBITMQ_VHOST}"
+    rabbitmqadmin_cli \
+      declare permission \
+      vhost="${RABBITMQ_VHOST}" \
+      user="${RABBITMQ_USERNAME}" \
+      configure=".*" \
+      write=".*" \
+      read=".*"
+    
+    if [ ! -z "$RABBITMQ_AUXILIARY_CONFIGURATION" ]
+    then
+      echo "Applying additional configuration"
+      echo "${RABBITMQ_AUXILIARY_CONFIGURATION}" > /tmp/rmq_definitions.json
+      rabbitmqadmin_cli import /tmp/rmq_definitions.json
+    fi

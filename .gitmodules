@@ -4,3 +4,9 @@
 [submodule "rke2/kube-ovn"]
 	path = rke2/kube-ovn
 	url = https://github.com/kubeovn/kube-ovn.git
+[submodule "osh/openstack-helm"]
+	path = osh/openstack-helm
+	url = https://github.com/openstack/openstack-helm.git
+[submodule "osh/openstack-helm-infra"]
+	path = osh/openstack-helm-infra
+	url = https://github.com/openstack/openstack-helm-infra.git

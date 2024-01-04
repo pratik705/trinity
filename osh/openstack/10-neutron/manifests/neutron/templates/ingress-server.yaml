@@ -1,0 +1,83 @@
+---
+# Source: neutron/templates/ingress-server.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neutron
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: neutron
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: neutron-server
+                port:
+                  name: "q-api"
+    - host: neutron.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: neutron-server
+                port:
+                  name: "q-api"
+    - host: neutron.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: neutron-server
+                port:
+                  name: "q-api"
+---
+# Source: neutron/templates/ingress-server.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neutron-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: neutron-server.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: neutron-server
+                port:
+                  name: "q-api"
+---
+# Source: neutron/templates/ingress-server.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neutron-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: neutron-server.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: neutron-server
+                port:
+                  name: "q-api"

@@ -1,0 +1,6 @@
+resources:
+  - heat-mariadb-database.yaml
+  - heat-rabbitmq-queue.yaml
+  - hpa-heat-api.yaml
+  - hpa-heat-cfn.yaml
+  - hpa-heat-engine.yaml

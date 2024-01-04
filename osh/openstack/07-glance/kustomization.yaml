@@ -1,0 +1,91 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/glance/templates/configmap-bin.yaml
+- manifests/glance/templates/deployment-api.yaml
+- manifests/glance/templates/encrypted-configmap-etc.yaml
+- manifests/glance/templates/encrypted-secret-db.yaml
+- manifests/glance/templates/encrypted-secret-keystone.yaml
+- manifests/glance/templates/encrypted-secret-rabbitmq.yaml
+- manifests/glance/templates/ingress-api.yaml
+- manifests/glance/templates/job-bootstrap.yaml
+- manifests/glance/templates/job-clean.yaml
+- manifests/glance/templates/job-db-sync.yaml
+- manifests/glance/templates/job-ks-endpoints.yaml
+- manifests/glance/templates/job-ks-service.yaml
+- manifests/glance/templates/job-ks-user.yaml
+- manifests/glance/templates/job-metadefs-load.yaml
+- manifests/glance/templates/network_policy.yaml
+- manifests/glance/templates/pdb-api.yaml
+- manifests/glance/templates/pvc-images.yaml
+- manifests/glance/templates/service-api.yaml
+- manifests/glance/templates/service-ingress-api.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: PersistentVolumeClaim
+    name: glance-images
+  patch: |-
+    - op: replace
+      path: /spec/accessModes
+      value: ["ReadWriteMany"]
+- target:
+    kind: Job
+    name: glance-clean
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: glance-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: glance-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: glance-bootstrap
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/hook: Sync
+        argocd.argoproj.io/hook-delete-policy: HookSucceeded        
+- target:
+    kind: Job
+    name: glance-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: glance-metadefs-load
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/hook: Sync
+        argocd.argoproj.io/hook-delete-policy: HookSucceeded
+- target:
+    kind: Job
+    name: glance-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: glance-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: glance-api
+    spec:
+      replicas: null

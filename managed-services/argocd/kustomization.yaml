@@ -1,0 +1,10 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: argo-cd
+  includeCRDs: true
+  valuesFile: values.yaml
+  releaseName: argocd
+  version: 5.51.5
+  repo: https://argoproj.github.io/argo-helm

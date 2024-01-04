@@ -1,0 +1,13 @@
+---
+# Source: nova/templates/pdb-metadata.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nova-api-metadata
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: nova
+      application: nova
+      component: metadata

@@ -1,0 +1,13 @@
+---
+# Source: horizon/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: horizon
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: horizon
+      application: horizon
+      component: server

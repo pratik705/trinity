@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/neutron/templates/configmap-bin.yaml
+- manifests/neutron/templates/daemonset-netns-cleanup-cron.yaml
+- manifests/neutron/templates/daemonset-ovn-metadata-agent.yaml
+- manifests/neutron/templates/deployment-server.yaml
+- manifests/neutron/templates/encrypted-configmap-etc.yaml
+- manifests/neutron/templates/encrypted-secret-keystone.yaml
+- manifests/neutron/templates/encrypted-secrets_daemonset-netns-cleanup-cron.yaml
+- manifests/neutron/templates/encrypted-secrets_daemonset-ovn-metadata-agent.yaml
+- manifests/neutron/templates/ingress-server.yaml
+- manifests/neutron/templates/job-db-sync.yaml
+- manifests/neutron/templates/job-ks-endpoints.yaml
+- manifests/neutron/templates/job-ks-service.yaml
+- manifests/neutron/templates/job-ks-user.yaml
+- manifests/neutron/templates/network_policy.yaml
+- manifests/neutron/templates/pdb-server.yaml
+- manifests/neutron/templates/service-ingress-neutron.yaml
+- manifests/neutron/templates/service-server.yaml
+- pre-req
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: neutron-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: neutron-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: neutron-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: neutron-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: neutron-server
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: neutron-server
+    spec:
+      replicas: null

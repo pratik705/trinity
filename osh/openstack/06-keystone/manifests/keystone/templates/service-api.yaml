@@ -1,0 +1,15 @@
+---
+# Source: keystone/templates/service-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: keystone-api
+spec:
+  ports:
+    - name: ks-pub
+      port: 5000
+      
+  selector:
+    release_group: keystone
+    application: keystone
+    component: api

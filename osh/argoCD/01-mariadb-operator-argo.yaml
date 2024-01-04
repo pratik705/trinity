@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-operator
+  namespace: rackspace-system
+spec:
+  destination:
+    name: ''
+    namespace: ''
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: osh/openstack/01-mariadb-operator
+    repoURL: 'https://github.com/pratik705/trinity.git'
+    targetRevision: HEAD
+  syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
+    automated:
+      selfHeal: true
+      prune: false    
+  sources: []
+  project: default

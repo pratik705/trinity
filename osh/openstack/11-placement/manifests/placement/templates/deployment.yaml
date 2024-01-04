@@ -1,0 +1,226 @@
+---
+# Source: placement/templates/deployment.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: placement-api
+  namespace: openstack
+---
+# Source: placement/templates/deployment.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: placement-openstack-placement-api
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - jobs
+      - pods
+---
+# Source: placement/templates/deployment.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: placement-placement-api
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: placement-openstack-placement-api
+subjects:
+  - kind: ServiceAccount
+    name: placement-api
+    namespace: openstack
+---
+# Source: placement/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placement-api
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: placement
+    application: placement
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: placement
+      application: placement
+      component: api
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: placement
+        application: placement
+        component: api
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "c790b7759067f61e37113e145e34897164345c3f6d0457eac93db5bceb9ca66f"
+        configmap-etc-hash: "5ea78863f36369ebf19349cca29763a67c2d495277ea8de2e1d22b8710839af8"
+        
+    spec:
+      serviceAccountName: placement-api
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - placement
+                  - key: application
+                    operator: In
+                    values:
+                    - placement
+                  - key: component
+                    operator: In
+                    values:
+                    - api
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: ""
+            - name: DEPENDENCY_JOBS
+              value: "placement-db-sync,placement-ks-service,placement-ks-user,placement-ks-endpoints"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: placement-api
+          image: "docker.io/openstackhelm/placement:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            readOnlyRootFilesystem: false
+            runAsUser: 0
+          command:
+            - /tmp/placement-api.sh
+            - start
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/placement-api.sh
+                  - stop
+          ports:
+            - name: p-api
+              containerPort: 8778
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8778
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8778
+            initialDelaySeconds: 50
+            periodSeconds: 10
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: wsgi-placement
+              mountPath: /var/www/cgi-bin/placement
+            - name: placement-bin
+              mountPath: /tmp/placement-api.sh
+              subPath: placement-api.sh
+              readOnly: true
+            - name: placement-etc
+              mountPath: /etc/placement/placement.conf
+              subPath: placement.conf
+              readOnly: true
+            - name: placement-etc
+              mountPath: /etc/placement/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: placement-etc
+              mountPath: /etc/placement/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            - name: placement-etc
+              mountPath: /etc/apache2/conf-enabled/wsgi-placement.conf
+              subPath: wsgi-placement.conf
+              readOnly: true                        
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: wsgi-placement
+          emptyDir: {}
+        - name: placement-bin
+          configMap:
+            name: placement-bin
+            defaultMode: 0555
+        - name: placement-etc
+          secret:
+            secretName: placement-etc
+            defaultMode: 0444

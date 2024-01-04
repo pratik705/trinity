@@ -1,0 +1,13 @@
+---
+# Source: heat/templates/pdb-api.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: heat-api
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: heat
+      application: heat
+      component: api

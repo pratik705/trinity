@@ -1,0 +1,114 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/nova/templates/configmap-bin.yaml
+- manifests/nova/templates/cron-job-cell-setup.yaml
+- manifests/nova/templates/cron-job-service-cleaner.yaml
+- manifests/nova/templates/daemonset-compute.yaml
+- manifests/nova/templates/deployment-api-metadata.yaml
+- manifests/nova/templates/deployment-api-osapi.yaml
+- manifests/nova/templates/deployment-conductor.yaml
+- manifests/nova/templates/deployment-novncproxy.yaml
+- manifests/nova/templates/deployment-scheduler.yaml
+- manifests/nova/templates/encrypted-configmap-etc.yaml
+- manifests/nova/templates/encrypted-secret-db-api.yaml
+- manifests/nova/templates/encrypted-secret-db-cell0.yaml
+- manifests/nova/templates/encrypted-secret-db.yaml
+- manifests/nova/templates/encrypted-secret-keystone.yaml
+- manifests/nova/templates/encrypted-secret-ssh.yaml
+- manifests/nova/templates/encrypted-secret_rabbitmq.yaml
+- manifests/nova/templates/encrypted-secrets_daemonset-compute.yaml
+- manifests/nova/templates/ingress-metadata.yaml
+- manifests/nova/templates/ingress-novncproxy.yaml
+- manifests/nova/templates/ingress-osapi.yaml
+- manifests/nova/templates/job-bootstrap.yaml
+- manifests/nova/templates/job-cell-setup.yaml
+- manifests/nova/templates/job-db-sync.yaml
+- manifests/nova/templates/job-ks-endpoints.yaml
+- manifests/nova/templates/job-ks-service.yaml
+- manifests/nova/templates/job-ks-user.yaml
+- manifests/nova/templates/pdb-metadata.yaml
+- manifests/nova/templates/pdb-osapi.yaml
+- manifests/nova/templates/service-ingress-metadata.yaml
+- manifests/nova/templates/service-ingress-novncproxy.yaml
+- manifests/nova/templates/service-ingress-osapi.yaml
+- manifests/nova/templates/service-metadata.yaml
+- manifests/nova/templates/service-novncproxy.yaml
+- manifests/nova/templates/service-osapi.yaml
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: nova-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: nova-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: nova-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: nova-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: nova-api-osapi
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nova-api-osapi
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: nova-api-metadata
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nova-api-metadata
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: nova-conductor
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nova-conductor
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: nova-novncproxy
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nova-novncproxy
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: nova-scheduler
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nova-scheduler
+    spec:
+      replicas: null

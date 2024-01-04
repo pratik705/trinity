@@ -1,0 +1,7 @@
+resources:
+  - cinder-mariadb-database.yaml
+  - cinder-rabbitmq-queue.yaml
+  - hpa-cinder-scheduler.yaml
+  - hpa-cinder-api.yaml
+  - ceph-etc-CM.yaml
+  - encrypted-rbd-client1-secret.yaml

@@ -1,0 +1,273 @@
+---
+# Source: keystone/templates/deployment-api.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keystone-api
+  namespace: openstack
+---
+# Source: keystone/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keystone-openstack-keystone-api
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: keystone/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keystone-keystone-api
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keystone-openstack-keystone-api
+subjects:
+  - kind: ServiceAccount
+    name: keystone-api
+    namespace: openstack
+---
+# Source: keystone/templates/deployment-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keystone-api
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: keystone
+    application: keystone
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      release_group: keystone
+      application: keystone
+      component: api
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: keystone
+        application: keystone
+        component: api
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "3893cba6daf98f87b5895960410d2320d2eb5f67c632f6017c90318bac1a9d29"
+        configmap-etc-hash: "2e3d85bac8aab1b8ced06aefa90b97f6f3890e2a04452b262d2ce97315180da0"
+        
+    spec:
+      securityContext:
+        runAsUser: 42424
+      serviceAccountName: keystone-api
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - keystone
+                  - key: application
+                    operator: In
+                    values:
+                    - keystone
+                  - key: component
+                    operator: In
+                    values:
+                    - api
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:memcached,openstack:mariadb-galera-primary"
+            - name: DEPENDENCY_JOBS
+              value: "keystone-db-sync,keystone-credential-setup,keystone-fernet-setup"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: keystone-api
+          image: "ghcr.io/cloudnull/keystone-rxt:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 22000m
+              memory: 15024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/keystone-api.sh
+            - start
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/keystone-api.sh
+                  - stop
+          ports:
+            - name: ks-pub
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /v3/
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 60
+            timeoutSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /v3/
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 50
+            periodSeconds: 60
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: etckeystone
+              mountPath: /etc/keystone
+            - name: logs-apache
+              mountPath: /var/log/apache2
+            - name: run-apache
+              mountPath: /var/run/apache2
+            - name: wsgi-keystone
+              mountPath: /var/www/cgi-bin/keystone
+            - name: keystone-etc
+              mountPath: /etc/keystone/keystone.conf
+              subPath: keystone.conf
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/apache2/ports.conf
+              subPath: ports.conf
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/keystone/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/keystone/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/keystone/access_rules.json
+              subPath: access_rules.json
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/keystone/sso_callback_template.html
+              subPath: sso_callback_template.html
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/apache2/conf-enabled/wsgi-keystone.conf
+              subPath: wsgi-keystone.conf
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/apache2/mods-available/mpm_event.conf
+              subPath: mpm_event.conf
+              readOnly: true
+            - name: keystone-etc
+              mountPath: /etc/apache2/conf-enabled/security.conf
+              subPath: security.conf
+              readOnly: true
+            - name: keystone-bin
+              mountPath: /tmp/keystone-api.sh
+              subPath: keystone-api.sh
+              readOnly: true
+            - name: keystone-fernet-keys
+              mountPath: /etc/keystone/fernet-keys/
+            - name: keystone-credential-keys
+              mountPath: /etc/keystone/credential-keys/                                    
+
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: etckeystone
+          emptyDir: {}
+        - name: wsgi-keystone
+          emptyDir: {}
+        - name: logs-apache
+          emptyDir: {}
+        - name: run-apache
+          emptyDir: {}
+        - name: keystone-etc
+          secret:
+            secretName: keystone-etc
+            defaultMode: 0444
+        - name: keystone-bin
+          configMap:
+            name: keystone-bin
+            defaultMode: 0555
+        - name: keystone-fernet-keys
+          secret:
+            secretName: keystone-fernet-keys
+        - name: keystone-credential-keys
+          secret:
+            secretName: keystone-credential-keys

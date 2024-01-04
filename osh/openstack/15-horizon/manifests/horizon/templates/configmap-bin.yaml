@@ -1,0 +1,515 @@
+---
+# Source: horizon/templates/configmap-bin.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: horizon-bin
+data:
+  db-init.py: |    
+    #!/usr/bin/env python
+    
+    # Creates db and user for an OpenStack Service:
+    # Set ROOT_DB_CONNECTION and DB_CONNECTION environment variables to contain
+    # SQLAlchemy strings for the root connection to the database and the one you
+    # wish the service to use. Alternatively, you can use an ini formatted config
+    # at the location specified by OPENSTACK_CONFIG_FILE, and extract the string
+    # from the key OPENSTACK_CONFIG_DB_KEY, in the section specified by
+    # OPENSTACK_CONFIG_DB_SECTION.
+    
+    import os
+    import sys
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    import logging
+    from sqlalchemy import create_engine
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm DB Init')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    # Get the connection string for the service db root user
+    if "ROOT_DB_CONNECTION" in os.environ:
+        db_connection = os.environ['ROOT_DB_CONNECTION']
+        logger.info('Got DB root connection')
+    else:
+        logger.critical('environment variable ROOT_DB_CONNECTION not set')
+        sys.exit(1)
+    
+    mysql_x509 = os.getenv('MARIADB_X509', "")
+    ssl_args = {}
+    if mysql_x509:
+        ssl_args = {'ssl': {'ca': '/etc/mysql/certs/ca.crt',
+                    'key': '/etc/mysql/certs/tls.key',
+                    'cert': '/etc/mysql/certs/tls.crt'}}
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical("Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical('Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # Root DB engine
+    try:
+        root_engine_full = create_engine(db_connection)
+        root_user = root_engine_full.url.username
+        root_password = root_engine_full.url.password
+        drivername = root_engine_full.url.drivername
+        host = root_engine_full.url.host
+        port = root_engine_full.url.port
+        root_engine_url = ''.join([drivername, '://', root_user, ':', root_password, '@', host, ':', str (port)])
+        root_engine = create_engine(root_engine_url, connect_args=ssl_args)
+        connection = root_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1} as {2}".format(
+            host, port, root_user))
+    except:
+        logger.critical('Could not connect to database as root user')
+        raise
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn, connect_args=ssl_args)
+        # Get our user data out of the user_engine
+        database = user_engine.url.database
+        user = user_engine.url.username
+        password = user_engine.url.password
+        logger.info('Got user db config')
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Create DB
+    try:
+        root_engine.execute("CREATE DATABASE IF NOT EXISTS {0}".format(database))
+        logger.info("Created database {0}".format(database))
+    except:
+        logger.critical("Could not create database {0}".format(database))
+        raise
+    
+    # Create DB User
+    try:
+        root_engine.execute(
+            "CREATE USER IF NOT EXISTS \'{0}\'@\'%%\' IDENTIFIED BY \'{1}\' {2}".format(
+                user, password, mysql_x509))
+        root_engine.execute(
+            "GRANT ALL ON `{0}`.* TO \'{1}\'@\'%%\'".format(database, user))
+        logger.info("Created user {0} for {1}".format(user, database))
+    except:
+        logger.critical("Could not create user {0} for {1}".format(user, database))
+        raise
+    
+    # Test connection
+    try:
+        connection = user_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1}/{2} as {3}".format(
+            host, port, database, user))
+    except:
+        logger.critical('Could not connect to database as user')
+        raise
+    
+    logger.info('Finished DB Management')
+  db-sync.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    
+    SITE_PACKAGES_ROOT=$(python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
+    rm -f ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/local_settings.py
+    ln -s /etc/openstack-dashboard/local_settings ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/local_settings.py
+    
+    exec /tmp/manage.py migrate --noinput
+    
+  db-drop.py: |    
+    #!/usr/bin/env python
+    
+    # Drops db and user for an OpenStack Service:
+    # Set ROOT_DB_CONNECTION and DB_CONNECTION environment variables to contain
+    # SQLAlchemy strings for the root connection to the database and the one you
+    # wish the service to use. Alternatively, you can use an ini formatted config
+    # at the location specified by OPENSTACK_CONFIG_FILE, and extract the string
+    # from the key OPENSTACK_CONFIG_DB_KEY, in the section specified by
+    # OPENSTACK_CONFIG_DB_SECTION.
+    
+    import os
+    import sys
+    try:
+        import ConfigParser
+        PARSER_OPTS = {}
+    except ImportError:
+        import configparser as ConfigParser
+        PARSER_OPTS = {"strict": False}
+    import logging
+    from sqlalchemy import create_engine
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('OpenStack-Helm DB Drop')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Set the formatter and add the handler
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    # Get the connection string for the service db root user
+    if "ROOT_DB_CONNECTION" in os.environ:
+        db_connection = os.environ['ROOT_DB_CONNECTION']
+        logger.info('Got DB root connection')
+    else:
+        logger.critical('environment variable ROOT_DB_CONNECTION not set')
+        sys.exit(1)
+    
+    mysql_x509 = os.getenv('MARIADB_X509', "")
+    ssl_args = {}
+    if mysql_x509:
+        ssl_args = {'ssl': {'ca': '/etc/mysql/certs/ca.crt',
+                            'key': '/etc/mysql/certs/tls.key',
+                            'cert': '/etc/mysql/certs/tls.crt'}}
+    
+    # Get the connection string for the service db
+    if "OPENSTACK_CONFIG_FILE" in os.environ:
+        os_conf = os.environ['OPENSTACK_CONFIG_FILE']
+        if "OPENSTACK_CONFIG_DB_SECTION" in os.environ:
+            os_conf_section = os.environ['OPENSTACK_CONFIG_DB_SECTION']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_SECTION not set')
+            sys.exit(1)
+        if "OPENSTACK_CONFIG_DB_KEY" in os.environ:
+            os_conf_key = os.environ['OPENSTACK_CONFIG_DB_KEY']
+        else:
+            logger.critical('environment variable OPENSTACK_CONFIG_DB_KEY not set')
+            sys.exit(1)
+        try:
+            config = ConfigParser.RawConfigParser(**PARSER_OPTS)
+            logger.info("Using {0} as db config source".format(os_conf))
+            config.read(os_conf)
+            logger.info("Trying to load db config from {0}:{1}".format(
+                os_conf_section, os_conf_key))
+            user_db_conn = config.get(os_conf_section, os_conf_key)
+            logger.info("Got config from {0}".format(os_conf))
+        except:
+            logger.critical("Tried to load config from {0} but failed.".format(os_conf))
+            raise
+    elif "DB_CONNECTION" in os.environ:
+        user_db_conn = os.environ['DB_CONNECTION']
+        logger.info('Got config from DB_CONNECTION env var')
+    else:
+        logger.critical('Could not get db config, either from config file or env var')
+        sys.exit(1)
+    
+    # Root DB engine
+    try:
+        root_engine_full = create_engine(db_connection)
+        root_user = root_engine_full.url.username
+        root_password = root_engine_full.url.password
+        drivername = root_engine_full.url.drivername
+        host = root_engine_full.url.host
+        port = root_engine_full.url.port
+        root_engine_url = ''.join([drivername, '://', root_user, ':', root_password, '@', host, ':', str (port)])
+        root_engine = create_engine(root_engine_url, connect_args=ssl_args)
+        connection = root_engine.connect()
+        connection.close()
+        logger.info("Tested connection to DB @ {0}:{1} as {2}".format(
+            host, port, root_user))
+    except:
+        logger.critical('Could not connect to database as root user')
+        raise
+    
+    # User DB engine
+    try:
+        user_engine = create_engine(user_db_conn, connect_args=ssl_args)
+        # Get our user data out of the user_engine
+        database = user_engine.url.database
+        user = user_engine.url.username
+        password = user_engine.url.password
+        logger.info('Got user db config')
+    except:
+        logger.critical('Could not get user database config')
+        raise
+    
+    # Delete DB
+    try:
+        root_engine.execute("DROP DATABASE IF EXISTS {0}".format(database))
+        logger.info("Deleted database {0}".format(database))
+    except:
+        logger.critical("Could not drop database {0}".format(database))
+        raise
+    
+    # Delete DB User
+    try:
+        root_engine.execute("DROP USER IF EXISTS {0}".format(user))
+        logger.info("Deleted user {0}".format(user))
+    except:
+        logger.critical("Could not delete user {0}".format(user))
+        raise
+    
+    logger.info('Finished DB Management')
+  horizon.sh: |
+    #!/bin/bash
+    
+    
+    
+    set -ex
+    COMMAND="${@:-start}"
+    
+    function start () {
+      SITE_PACKAGES_ROOT=$(python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
+      rm -f ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/local_settings.py
+      ln -s /etc/openstack-dashboard/local_settings ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/local_settings.py
+      ln -s  ${SITE_PACKAGES_ROOT}/openstack_dashboard/conf/default_policies  /etc/openstack-dashboard/default_policies
+      # wsgi/horizon-http needs open files here, including secret_key_store
+      chown -R horizon ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/
+      a2enmod headers
+      a2enmod rewrite
+      a2dismod status
+    
+      if [ -f /etc/apache2/envvars ]; then
+         # Loading Apache2 ENV variables
+         source /etc/apache2/envvars
+         # The directory below has to be created due to the fact that
+         # libapache2-mod-wsgi-py3 doesn't create it in contrary by libapache2-mod-wsgi
+         if [ ! -d ${APACHE_RUN_DIR} ]; then
+            mkdir -p ${APACHE_RUN_DIR}
+         fi
+      fi
+      rm -rf /var/run/apache2/*
+      APACHE_DIR="apache2"
+    
+      # Add extra panels if available
+      PANEL_DIR="${SITE_PACKAGES_ROOT}/heat_dashboard/enabled"
+      if [ -d ${PANEL_DIR} ];then
+        for panel in `ls -1 ${PANEL_DIR}/_[1-9]*.py`
+        do
+          ln -s ${panel} ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/enabled/$(basename ${panel})
+        done
+      fi
+      unset PANEL_DIR
+      PANEL_DIR="${SITE_PACKAGES_ROOT}/heat_dashboard/local/enabled"
+      if [ -d ${PANEL_DIR} ];then
+        for panel in `ls -1 ${PANEL_DIR}/_[1-9]*.py`
+        do
+          ln -s ${panel} ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/enabled/$(basename ${panel})
+        done
+      fi
+      unset PANEL_DIR
+      PANEL_DIR="${SITE_PACKAGES_ROOT}/neutron_taas_dashboard/enabled"
+      if [ -d ${PANEL_DIR} ];then
+        for panel in `ls -1 ${PANEL_DIR}/_[1-9]*.py`
+        do
+          ln -s ${panel} ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/enabled/$(basename ${panel})
+        done
+      fi
+      unset PANEL_DIR
+      PANEL_DIR="${SITE_PACKAGES_ROOT}/neutron_taas_dashboard/local/enabled"
+      if [ -d ${PANEL_DIR} ];then
+        for panel in `ls -1 ${PANEL_DIR}/_[1-9]*.py`
+        do
+          ln -s ${panel} ${SITE_PACKAGES_ROOT}/openstack_dashboard/local/enabled/$(basename ${panel})
+        done
+      fi
+      unset PANEL_DIR
+    
+      # If the image has support for it, compile the translations
+      if type -p gettext >/dev/null 2>/dev/null; then
+        cd ${SITE_PACKAGES_ROOT}/openstack_dashboard; /tmp/manage.py compilemessages
+        # if there are extra panels and the image has support for it, compile the translations
+        PANEL_DIR="${SITE_PACKAGES_ROOT}/heat_dashboard"
+        if [ -d ${PANEL_DIR} ]; then
+          cd ${PANEL_DIR}; /tmp/manage.py compilemessages
+        fi
+        PANEL_DIR="${SITE_PACKAGES_ROOT}/neutron_taas_dashboard"
+        if [ -d ${PANEL_DIR} ]; then
+          cd ${PANEL_DIR}; /tmp/manage.py compilemessages
+        fi
+        unset PANEL_DIR
+      fi
+    
+      # Copy custom logo images
+      cp /tmp/favicon.ico ${SITE_PACKAGES_ROOT}/openstack_dashboard/static/dashboard/img/favicon.ico
+      cp /tmp/logo.svg ${SITE_PACKAGES_ROOT}/openstack_dashboard/static/dashboard/img/logo.svg
+      cp /tmp/logo-splash.svg ${SITE_PACKAGES_ROOT}/openstack_dashboard/static/dashboard/img/logo-splash.svg
+    
+      # Compress Horizon's assets.
+      /tmp/manage.py collectstatic --noinput
+      /tmp/manage.py compress --force
+      rm -rf /tmp/_tmp_.secret_key_store.lock /tmp/.secret_key_store
+      chmod +x ${SITE_PACKAGES_ROOT}/django/core/wsgi.py
+      exec apache2 -DFOREGROUND
+    }
+    
+    function stop () {
+      apache2 -k graceful-stop
+    }
+    
+    $COMMAND
+    
+  manage.py: |
+    #!/usr/bin/env python
+    
+    
+    
+    
+    
+    import os
+    import sys
+    
+    import pymysql
+    pymysql.version_info = (1, 4, 0, "final", 0)
+    pymysql.install_as_MySQLdb()
+    
+    from django.core.management import execute_from_command_line
+    
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE",
+                              "openstack_dashboard.settings")
+        execute_from_command_line(sys.argv)
+    
+  django.wsgi: |
+    
+    
+    
+    
+    import logging
+    import os
+    import sys
+    
+    import pymysql
+    
+    pymysql.version_info = (1, 4, 0, "final", 0)
+    pymysql.install_as_MySQLdb()
+    
+    from django.core.wsgi import get_wsgi_application
+    from django.conf import settings
+    
+    # Add this file path to sys.path in order to import settings
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../..'))
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'openstack_dashboard.settings'
+    sys.stdout = sys.stderr
+    
+    DEBUG = False
+    
+    application = get_wsgi_application()
+    
+  selenium-test.py: |
+    #!/usr/bin/env python3
+    
+    
+    
+    import os
+    import sys
+    import logging
+    
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium.common.exceptions import TimeoutException
+    from selenium.common.exceptions import NoSuchElementException
+    
+    # Create logger, console handler and formatter
+    logger = logging.getLogger('Horizon Selenium Tests')
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    
+    def get_variable(env_var):
+        if env_var in os.environ:
+            logger.info('Found "{}"'.format(env_var))
+            return os.environ[env_var]
+        else:
+            logger.critical('Variable "{}" is not defined!'.format(env_var))
+            sys.exit(1)
+    
+    
+    keystone_user = get_variable('OS_USERNAME')
+    keystone_password = get_variable('OS_PASSWORD')
+    horizon_uri = get_variable('HORIZON_URI')
+    user_domain_name = get_variable('OS_USER_DOMAIN_NAME')
+    
+    # Add options to make chrome browser headless
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    chrome_driver = '/etc/selenium/chromedriver'
+    service = Service(executable_path=chrome_driver)
+    browser = webdriver.Chrome(service=service, options=options)
+    
+    try:
+        logger.info('Attempting to connect to Horizon')
+        browser.get(horizon_uri)
+        el = WebDriverWait(browser, 15).until(
+            EC.title_contains('OpenStack Dashboard')
+        )
+        logger.info('Connected to Horizon')
+    except TimeoutException:
+        logger.critical('Timed out waiting for Horizon')
+        browser.quit()
+        sys.exit(1)
+    
+    try:
+        logger.info('Attempting to log into Horizon')
+        browser.find_element(By.NAME, 'domain').send_keys(user_domain_name)
+        browser.find_element(By.NAME, 'username').send_keys(keystone_user)
+        browser.find_element(By.NAME, 'password').send_keys(keystone_password)
+        browser.find_element(By.ID, 'loginBtn').click()
+        WebDriverWait(browser, 15).until(
+            EC.presence_of_element_located((By.ID, 'navbar-collapse'))
+        )
+        logger.info("Successfully logged into Horizon")
+    except (TimeoutException, NoSuchElementException):
+        logger.error('Failed to login to Horizon')
+        browser.quit()
+        sys.exit(1)
+    
+    browser.quit()

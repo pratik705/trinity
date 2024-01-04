@@ -1,0 +1,8 @@
+secret-keystone.yaml
+secret_rabbitmq.yaml
+configmap-etc.yaml
+secret-ssh.yaml
+secrets_daemonset-compute.yaml
+secret-db.yaml
+secret-db-api.yaml
+secret-db-cell0.yaml

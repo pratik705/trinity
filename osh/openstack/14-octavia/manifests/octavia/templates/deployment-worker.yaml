@@ -1,0 +1,196 @@
+---
+# Source: octavia/templates/deployment-worker.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: octavia-worker
+  namespace: openstack
+---
+# Source: octavia/templates/deployment-worker.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: octavia-openstack-octavia-worker
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: octavia/templates/deployment-worker.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: octavia-octavia-worker
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: octavia-openstack-octavia-worker
+subjects:
+  - kind: ServiceAccount
+    name: octavia-worker
+    namespace: openstack
+---
+# Source: octavia/templates/deployment-worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octavia-worker
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: octavia
+    application: octavia
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      release_group: octavia
+      application: octavia
+      component: worker
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: octavia
+        application: octavia
+        component: worker
+      annotations:
+        configmap-bin-hash: "a2cfb27c92f4e3c145d9ce2cbc12b159c1fe4f57ffc2620abb234d0a0abc919b"
+        configmap-etc-hash: "c94dda96b1ab4c17a23d46a8b9b34d2935fd874ac58238aa53d50dcd4d011f17"
+    spec:
+      serviceAccountName: octavia-worker
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - octavia
+                  - key: application
+                    operator: In
+                    values:
+                    - octavia
+                  - key: component
+                    operator: In
+                    values:
+                    - worker
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary,openstack:keystone-api,openstack:rabbitmq-nodes,openstack:memcached,openstack:neutron-server,openstack:octavia-api"
+            - name: DEPENDENCY_JOBS
+              value: "octavia-db-sync,octavia-ks-user,octavia-ks-endpoints"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+      containers:
+        - name: octavia-worker
+          image: "ghcr.io/cloudnull/genestack/octavia-ovn:master-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            runAsUser: 42424
+          command:
+            - /tmp/octavia-worker.sh
+            - start
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/octavia-worker.sh
+                  - stop
+          volumeMounts:
+            - name: pod-etc-octavia
+              mountPath: /etc/octavia
+            - name: octavia-bin
+              mountPath: /tmp/octavia-worker.sh
+              subPath: octavia-worker.sh
+              readOnly: true
+            - name: octavia-etc
+              mountPath: /etc/octavia/octavia.conf
+              subPath: octavia.conf
+              readOnly: true
+            - name: octavia-etc
+              mountPath: /etc/octavia/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - mountPath: /var/run/octavia
+              name: pod-run-octavia
+      volumes:
+        - name: pod-etc-octavia
+          emptyDir: {}
+        - name: octavia-bin
+          configMap:
+            name: octavia-bin
+            defaultMode: 0555
+        - name: octavia-etc
+          secret:
+            secretName: octavia-etc
+            defaultMode: 0444
+        - emptyDir: {}
+          name: pod-run-octavia

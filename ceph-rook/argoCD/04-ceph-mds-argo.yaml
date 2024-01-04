@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ceph-mds
+  namespace: rackspace-system
+spec:
+  destination:
+    name: ''
+    namespace: ''
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: ceph-rook/ceph-mds
+    repoURL: 'https://github.com/pratik705/trinity.git'
+    targetRevision: HEAD
+  syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
+    automated:
+      selfHeal: true
+      prune: false    
+  sources: []
+  project: default

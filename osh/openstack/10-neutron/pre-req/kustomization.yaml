@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- secrets/designate/encrypted-designate-admin-secret.yaml
+- secrets/ironic/encrypted-ironic-admin-secret.yaml
+- secrets/neutron/encrypted-neutron-admin-secret.yaml
+- secrets/neutron/encrypted-neutron-db-password-secret.yaml
+- secrets/neutron/encrypted-neutron-rabbitmq-password-secret.yaml
+- secrets/nova/encrypted-nova-admin-secret.yaml
+- secrets/nova/encrypted-nova-db-password-secret.yaml
+- secrets/nova/encrypted-nova-rabbitmq-secret.yaml
+- secrets/placement/encrypted-placement-admin-secret.yaml
+- secrets/placement/encrypted-placement-db-password-secret.yaml
+namespace: openstack

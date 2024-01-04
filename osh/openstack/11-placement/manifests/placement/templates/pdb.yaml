@@ -1,0 +1,13 @@
+---
+# Source: placement/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: placement-api
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      release_group: placement
+      application: placement
+      component: api

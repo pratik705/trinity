@@ -1,0 +1,15 @@
+---
+# Source: nova/templates/service-metadata.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nova-metadata
+spec:
+  ports:
+  - name: n-meta
+    port: 8775
+    
+  selector:
+    release_group: nova
+    application: nova
+    component: metadata

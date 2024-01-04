@@ -1,0 +1,15 @@
+---
+# Source: glance/templates/service-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: glance-api
+spec:
+  ports:
+    - name: g-api
+      port: 9292
+    
+  selector:
+    release_group: glance
+    application: glance
+    component: api

@@ -1,0 +1,10 @@
+namespace: rook-ceph
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: rook-ceph
+  includeCRDs: true
+  valuesFile: values.yaml
+  releaseName: rook-ceph
+  version: v1.13.0
+  repo: https://charts.rook.io/release

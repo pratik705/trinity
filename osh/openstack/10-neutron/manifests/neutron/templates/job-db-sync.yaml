@@ -1,0 +1,157 @@
+---
+# Source: neutron/templates/job-db-sync.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: neutron-db-sync
+  namespace: openstack
+---
+# Source: neutron/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: neutron-openstack-neutron-db-sync
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+---
+# Source: neutron/templates/job-db-sync.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: neutron-neutron-db-sync
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: neutron-openstack-neutron-db-sync
+subjects:
+  - kind: ServiceAccount
+    name: neutron-db-sync
+    namespace: openstack
+---
+# Source: neutron/templates/job-db-sync.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "neutron-db-sync"
+  labels:
+    release_group: neutron
+    application: neutron
+    component: db-sync
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-4"
+spec:
+  backoffLimit: 1000
+  template:
+    metadata:
+      labels:
+        release_group: neutron
+        application: neutron
+        component: db-sync
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+    spec:
+      serviceAccountName: neutron-db-sync
+      restartPolicy: OnFailure
+            
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: "neutron-db-sync"
+          image: "docker.io/openstackhelm/neutron:2023.1-ubuntu_jammy"
+          imagePullPolicy: "IfNotPresent"
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/db-sync.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: db-sync-sh
+              mountPath: /tmp/db-sync.sh
+              subPath: db-sync.sh
+              readOnly: true
+            - name: etc-service
+              mountPath: "/etc/neutron"
+            - name: db-sync-conf
+              mountPath: "/etc/neutron/neutron.conf"
+              subPath: "neutron.conf"
+              readOnly: true
+            - name: db-sync-conf
+              mountPath: "/etc/neutron/logging.conf"
+              subPath: "logging.conf"
+              readOnly: true            
+            - mountPath: /etc/neutron/plugins/ml2/ml2_conf.ini
+              name: db-sync-conf
+              readOnly: true
+              subPath: ml2_conf.ini
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: db-sync-sh
+          configMap:
+            name: "neutron-bin"
+            defaultMode: 0555
+        - name: etc-service
+          emptyDir: {}
+        - name: db-sync-conf
+          secret:
+            secretName: "neutron-etc"
+            defaultMode: 0444

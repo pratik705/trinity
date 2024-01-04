@@ -1,0 +1,5 @@
+resources:
+  - keystone-mariadb-database.yaml
+  - keystone-rabbitmq-queue.yaml
+  - hpa-keystone-api.yaml
+  - openstack-admin-client.yaml

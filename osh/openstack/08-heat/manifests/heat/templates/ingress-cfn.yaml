@@ -1,0 +1,83 @@
+---
+# Source: heat/templates/ingress-cfn.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudformation
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: cloudformation
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-cfn
+                port:
+                  name: "h-cfn"
+    - host: cloudformation.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-cfn
+                port:
+                  name: "h-cfn"
+    - host: cloudformation.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-cfn
+                port:
+                  name: "h-cfn"
+---
+# Source: heat/templates/ingress-cfn.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudformation-namespace-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: cloudformation-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-cfn
+                port:
+                  name: "h-cfn"
+---
+# Source: heat/templates/ingress-cfn.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cloudformation-cluster-fqdn
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "rackspace-nginx"
+  rules:
+    - host: cloudformation-trinity.pbandark.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: heat-cfn
+                port:
+                  name: "h-cfn"

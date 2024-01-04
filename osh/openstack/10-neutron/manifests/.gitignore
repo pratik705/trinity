@@ -1,0 +1,4 @@
+secret-keystone.yaml
+secrets_daemonset-netns-cleanup-cron.yaml
+configmap-etc.yaml
+secrets_daemonset-ovn-metadata-agent.yaml

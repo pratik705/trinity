@@ -1,0 +1,2 @@
+configmap-etc.yaml
+secrets_daemonset-libvirt.yaml

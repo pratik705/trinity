@@ -1,0 +1,41 @@
+---
+# Source: nova/templates/ingress-novncproxy.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: novncproxy
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: novncproxy
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-novncproxy
+                port:
+                  name: "n-novnc"
+    - host: novncproxy.openstack
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-novncproxy
+                port:
+                  name: "n-novnc"
+    - host: novncproxy.openstack.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nova-novncproxy
+                port:
+                  name: "n-novnc"

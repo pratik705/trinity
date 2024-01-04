@@ -1,0 +1,10 @@
+architecture: "high-availability"
+autoscaling:
+  enabled: "true"
+replicaCount: 3
+persistence:
+  enabled: true
+nodeSelector:
+  openstack-control-plane: enabled
+metrics:
+  enabled: true

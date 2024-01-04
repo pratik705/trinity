@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: openstack
+resources:
+  - './configmap.yaml'
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: mariadb-operator
+  includeCRDs: true
+  namespace: openstack
+  valuesFile: values.yaml
+  valuesMerge: replace
+  releaseName: mariadb-operator
+  version: 0.23.1
+  repo: https://mariadb-operator.github.io/mariadb-operator

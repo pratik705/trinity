@@ -1,0 +1,369 @@
+---
+# Source: glance/templates/job-ks-endpoints.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glance-ks-endpoints
+  namespace: openstack
+---
+# Source: glance/templates/job-ks-endpoints.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: glance-openstack-glance-ks-endpoints
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: glance/templates/job-ks-endpoints.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: glance-glance-ks-endpoints
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: glance-openstack-glance-ks-endpoints
+subjects:
+  - kind: ServiceAccount
+    name: glance-ks-endpoints
+    namespace: openstack
+---
+# Source: glance/templates/job-ks-endpoints.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "glance-ks-endpoints"
+  labels:
+    release_group: glance
+    application: glance
+    component: ks-endpoints
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-2"
+spec:
+  backoffLimit: 1000
+  template:
+    metadata:
+      labels:
+        release_group: glance
+        application: glance
+        component: ks-endpoints
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+    spec:
+      serviceAccountName: glance-ks-endpoints
+      restartPolicy: OnFailure
+            
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:keystone-api"
+            - name: DEPENDENCY_JOBS
+              value: "glance-ks-service"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: "image-ks-endpoints-admin"
+          image: docker.io/openstackhelm/heat:wallaby-ubuntu_focal
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/ks-endpoints.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: ks-endpoints-sh
+              mountPath: /tmp/ks-endpoints.sh
+              subPath: ks-endpoints.sh
+              readOnly: true
+            
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+            - name: OS_SVC_ENDPOINT
+              value: "admin"
+            - name: OS_SERVICE_NAME
+              value: "glance"
+            - name: OS_SERVICE_TYPE
+              value: "image"
+            - name: OS_SERVICE_ENDPOINT
+              value: "http://glance-api.openstack.svc.cluster.local:9292/"
+        - name: "image-ks-endpoints-internal"
+          image: docker.io/openstackhelm/heat:wallaby-ubuntu_focal
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/ks-endpoints.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: ks-endpoints-sh
+              mountPath: /tmp/ks-endpoints.sh
+              subPath: ks-endpoints.sh
+              readOnly: true
+            
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+            - name: OS_SVC_ENDPOINT
+              value: "internal"
+            - name: OS_SERVICE_NAME
+              value: "glance"
+            - name: OS_SERVICE_TYPE
+              value: "image"
+            - name: OS_SERVICE_ENDPOINT
+              value: "http://glance-api.openstack.svc.cluster.local:9292/"
+        - name: "image-ks-endpoints-public"
+          image: docker.io/openstackhelm/heat:wallaby-ubuntu_focal
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - /tmp/ks-endpoints.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: ks-endpoints-sh
+              mountPath: /tmp/ks-endpoints.sh
+              subPath: ks-endpoints.sh
+              readOnly: true
+            
+          env:            
+            - name: OS_IDENTITY_API_VERSION
+              value: "3"
+            - name: OS_AUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_AUTH_URL
+            - name: OS_REGION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_REGION_NAME
+            - name: OS_INTERFACE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_ENDPOINT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_INTERFACE
+            - name: OS_PROJECT_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_DOMAIN_NAME
+            - name: OS_PROJECT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PROJECT_NAME
+            - name: OS_USER_DOMAIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USER_DOMAIN_NAME
+            - name: OS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_USERNAME
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_PASSWORD
+            - name: OS_DEFAULT_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: glance-keystone-admin
+                  key: OS_DEFAULT_DOMAIN
+            - name: OS_SVC_ENDPOINT
+              value: "public"
+            - name: OS_SERVICE_NAME
+              value: "glance"
+            - name: OS_SERVICE_TYPE
+              value: "image"
+            - name: OS_SERVICE_ENDPOINT
+              value: "http://glance-trinity.pbandark.com/"
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: ks-endpoints-sh
+          configMap:
+            name: "glance-bin"
+            defaultMode: 0555

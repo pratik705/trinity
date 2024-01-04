@@ -1,0 +1,15 @@
+---
+# Source: nova/templates/service-novncproxy.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nova-novncproxy
+spec:
+  ports:
+  - name: n-novnc
+    port: 6080
+    
+  selector:
+    release_group: nova
+    application: nova
+    component: novnc-proxy

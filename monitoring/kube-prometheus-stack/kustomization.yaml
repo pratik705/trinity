@@ -1,0 +1,10 @@
+namespace: rackspace-system
+helmGlobals:
+  chartHome: ../charts/
+helmCharts:
+- name: kube-prometheus-stack
+  includeCRDs: true
+  releaseName: kube-prometheus-stack
+  valuesFile: values.yaml  
+  version: 55.5.1
+  repo: https://prometheus-community.github.io/helm-charts

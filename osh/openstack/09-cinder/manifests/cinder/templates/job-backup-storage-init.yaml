@@ -1,0 +1,144 @@
+---
+# Source: cinder/templates/job-backup-storage-init.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cinder-backup-storage-init
+  namespace: openstack
+---
+# Source: cinder/templates/job-backup-storage-init.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cinder-backup-storage-init
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+---
+# Source: cinder/templates/job-backup-storage-init.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cinder-backup-storage-init
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cinder-backup-storage-init
+subjects:
+  - kind: ServiceAccount
+    name: cinder-backup-storage-init
+    namespace: openstack
+---
+# Source: cinder/templates/job-backup-storage-init.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cinder-backup-storage-init
+  labels:
+    release_group: cinder
+    application: cinder
+    component: backup-storage-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+    "openstackhelm.openstack.org/release_uuid": ""
+spec:
+  template:
+    metadata:
+      labels:
+        release_group: cinder
+        application: cinder
+        component: storage-init
+      annotations:
+        
+    spec:
+      serviceAccountName: cinder-backup-storage-init
+      securityContext:
+        runAsUser: 42424
+      restartPolicy: OnFailure
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: ""
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            []
+      containers:
+        - name: cinder-backup-storage-init
+          image: "docker.io/openstackhelm/ceph-config-helper:latest-ubuntu_focal"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: STORAGE_BACKEND
+              value: "cinder.backup.drivers.swift.SwiftBackupDriver"
+          command:
+            - /tmp/backup-storage-init.sh
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: cinder-bin
+              mountPath: /tmp/backup-storage-init.sh
+              subPath: backup-storage-init.sh
+              readOnly: true
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: cinder-bin
+          configMap:
+            name: cinder-bin
+            defaultMode: 0555

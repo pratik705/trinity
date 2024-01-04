@@ -1,0 +1,19 @@
+ha:
+  enabled: true
+  replicas: 3
+metrics:
+  enabled: true
+nodeSelector:
+  openstack-control-plane: enabled
+
+webhook:
+  ha:
+    enabled: true
+    replicas: 3
+  cert:
+    certManager:
+      enabled: true
+  nodeSelector:
+    openstack-control-plane: enabled
+certController:
+  enabled: false   

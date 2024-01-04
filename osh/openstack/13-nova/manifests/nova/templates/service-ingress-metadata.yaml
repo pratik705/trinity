@@ -1,0 +1,14 @@
+---
+# Source: nova/templates/service-ingress-metadata.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: metadata
+spec:
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443
+  selector:
+    app: ingress-api

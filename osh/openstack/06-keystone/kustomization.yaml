@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/keystone/templates/configmap-bin.yaml
+- manifests/keystone/templates/cron-job-credential-rotate.yaml
+- manifests/keystone/templates/cron-job-fernet-rotate.yaml
+- manifests/keystone/templates/deployment-api.yaml
+- manifests/keystone/templates/encrypted-configmap-etc.yaml
+#- manifests/keystone/templates/encrypted-secret-credential-keys.yaml
+- manifests/keystone/templates/encrypted-secret-db.yaml
+- manifests/keystone/templates/encrypted-secret-fernet-keys.yaml
+- manifests/keystone/templates/encrypted-secret-keystone.yaml
+- manifests/keystone/templates/encrypted-secret-rabbitmq.yaml
+- manifests/keystone/templates/ingress-api.yaml
+- manifests/keystone/templates/job-bootstrap.yaml
+- manifests/keystone/templates/job-credential-setup.yaml
+- manifests/keystone/templates/job-db-sync.yaml
+- manifests/keystone/templates/job-domain-manage.yaml
+- manifests/keystone/templates/job-fernet-setup.yaml
+- manifests/keystone/templates/network_policy.yaml
+- manifests/keystone/templates/pdb.yaml
+- manifests/keystone/templates/service-api.yaml
+- manifests/keystone/templates/service-ingress-api.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: keystone-credential-setup
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: keystone-bootstrap
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/hook: Sync
+        argocd.argoproj.io/hook-delete-policy: HookSucceeded
+- target:
+    kind: Job
+    name: keystone-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: keystone-fernet-setup
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: keystone-domain-manage
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/hook: Sync
+        argocd.argoproj.io/hook-delete-policy: HookSucceeded
+- target:
+    kind: Secret
+    name: keystone-fernet-keys
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/hook: PreSync
+        argocd.argoproj.io/sync-wave: -1
+- target:
+    kind: Secret
+    name: keystone-credential-keys
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: keystone-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: keystone-api
+    spec:
+      replicas: null

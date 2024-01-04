@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/horizon/templates/configmap-bin.yaml
+- manifests/horizon/templates/configmap-logo.yaml
+- manifests/horizon/templates/deployment.yaml
+- manifests/horizon/templates/encrypted-configmap-etc.yaml
+- manifests/horizon/templates/encrypted-secret-db.yaml
+- manifests/horizon/templates/encrypted-secret-keystone.yaml
+- manifests/horizon/templates/ingress-api.yaml
+- manifests/horizon/templates/job-db-sync.yaml
+- manifests/horizon/templates/network_policy.yaml
+- manifests/horizon/templates/pdb.yaml
+- manifests/horizon/templates/service-ingress.yaml
+- manifests/horizon/templates/service.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: horizon-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: horizon
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: horizon
+    spec:
+      replicas: null

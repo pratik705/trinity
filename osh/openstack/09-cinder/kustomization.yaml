@@ -1,0 +1,96 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- addon_manifests
+- manifests/cinder/templates/configmap-bin.yaml
+- manifests/cinder/templates/cron-job-cinder-volume-usage-audit.yaml
+- manifests/cinder/templates/deployment-api.yaml
+- manifests/cinder/templates/deployment-backup.yaml
+- manifests/cinder/templates/deployment-scheduler.yaml
+- manifests/cinder/templates/deployment-volume.yaml
+- manifests/cinder/templates/encrypted-configmap-etc.yaml
+- manifests/cinder/templates/encrypted-secret-keystone.yaml
+- manifests/cinder/templates/ingress-api.yaml
+- manifests/cinder/templates/job-backup-storage-init.yaml
+- manifests/cinder/templates/job-bootstrap.yaml
+- manifests/cinder/templates/job-clean.yaml
+- manifests/cinder/templates/job-create-internal-tenant.yaml
+- manifests/cinder/templates/job-db-sync.yaml
+- manifests/cinder/templates/job-ks-endpoints.yaml
+- manifests/cinder/templates/job-ks-service.yaml
+- manifests/cinder/templates/job-ks-user.yaml
+- manifests/cinder/templates/network_policy.yaml
+- manifests/cinder/templates/pdb-api.yaml
+- manifests/cinder/templates/service-api.yaml
+- manifests/cinder/templates/service-ingress-api.yaml
+- secrets
+namespace: openstack
+patches:
+- target:
+    kind: Job
+    name: cinder-db-sync
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-ks-service
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-create-internal-tenant
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-backup-storage-init
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-ks-user
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-clean
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-ks-endpoints
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Job
+    name: cinder-bootstrap
+  patch: |-
+    - op: remove
+      path: /metadata/annotations
+- target:
+    kind: Deployment
+    name: cinder-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: cinder-api
+    spec:
+      replicas: null
+- target:
+    kind: Deployment
+    name: cinder-scheduler
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: cinder-scheduler
+    spec:
+      replicas: null

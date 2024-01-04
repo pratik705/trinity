@@ -1,0 +1,262 @@
+---
+# Source: cinder/templates/deployment-api.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cinder-api
+  namespace: openstack
+---
+# Source: cinder/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cinder-openstack-cinder-api
+  namespace: openstack
+rules:
+  - apiGroups:
+      - ""
+      - extensions
+      - batch
+      - apps
+    verbs:
+      - get
+      - list
+    resources:
+      - services
+      - endpoints
+      - jobs
+      - pods
+---
+# Source: cinder/templates/deployment-api.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cinder-cinder-api
+  namespace: openstack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cinder-openstack-cinder-api
+subjects:
+  - kind: ServiceAccount
+    name: cinder-api
+    namespace: openstack
+---
+# Source: cinder/templates/deployment-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cinder-api
+  annotations:
+    "openstackhelm.openstack.org/release_uuid": ""
+  labels:
+    release_group: cinder
+    application: cinder
+    component: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      release_group: cinder
+      application: cinder
+      component: api
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 3
+  template:
+    metadata:
+      labels:
+        release_group: cinder
+        application: cinder
+        component: api
+      annotations:
+        "openstackhelm.openstack.org/release_uuid": ""
+        configmap-bin-hash: "8c5986eba572d31613bd599cd0c2e58534fe29e89347669524ab59ddb7631397"
+        configmap-etc-hash: "2886f56fa94b290ce1c8c0ab21bc659460d8e452e68609800725c2b4153d877d"
+        
+    spec:
+      serviceAccountName: cinder-api
+      securityContext:
+        runAsUser: 42424
+      affinity:
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: release_group
+                    operator: In
+                    values:
+                    - cinder
+                  - key: application
+                    operator: In
+                    values:
+                    - cinder
+                  - key: component
+                    operator: In
+                    values:
+                    - api
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+
+      nodeSelector:
+        openstack-control-plane: enabled
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        
+        - name: init
+          image: "quay.io/airshipit/kubernetes-entrypoint:v1.0.0"
+          imagePullPolicy: IfNotPresent  
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INTERFACE_NAME
+              value: eth0
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+            - name: DEPENDENCY_SERVICE
+              value: "openstack:mariadb-galera-primary,openstack:keystone-api"
+            - name: DEPENDENCY_JOBS
+              value: "cinder-db-sync,cinder-ks-user,cinder-ks-endpoints"
+            - name: DEPENDENCY_DAEMONSET
+              value: ""
+            - name: DEPENDENCY_CONTAINER
+              value: ""
+            - name: DEPENDENCY_POD_JSON
+              value: ""
+            - name: DEPENDENCY_CUSTOM_RESOURCE
+              value: ""
+          command:
+            - kubernetes-entrypoint
+          volumeMounts:
+            null
+        - name: ceph-coordination-volume-perms
+          image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+          command:
+            - chown
+            - -R
+            - "cinder:"
+            - /var/lib/cinder/coordination
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: cinder-coordination
+              mountPath: /var/lib/cinder/coordination
+        
+      containers:
+        - name: cinder-api
+          image: "docker.io/openstackhelm/cinder:2023.1-ubuntu_jammy"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          command:
+            - /tmp/cinder-api.sh
+            - start
+          env:
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /tmp/cinder-api.sh
+                  - stop
+          ports:
+            - name: c-api
+              containerPort: 8776
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8776
+          livenessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /
+              port: 8776
+            initialDelaySeconds: 30
+            failureThreshold: 3
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          volumeMounts:
+            - name: pod-tmp
+              mountPath: /tmp
+            - name: wsgi-cinder
+              mountPath: /var/www/cgi-bin/cinder
+            - name: cinder-bin
+              mountPath: /tmp/cinder-api.sh
+              subPath: cinder-api.sh
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/cinder.conf
+              subPath: cinder.conf
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/logging.conf
+              subPath: logging.conf
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/api-paste.ini
+              subPath: api-paste.ini
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/api_audit_map.conf
+              subPath: api_audit_map.conf
+              readOnly: true
+            - name: cinder-etc
+              mountPath: /etc/cinder/resource_filters.json
+              subPath: resource_filters.json
+              readOnly: true
+            - name: cinder-coordination
+              mountPath: /var/lib/cinder/coordination                                    
+
+      volumes:
+        - name: pod-tmp
+          emptyDir: {}
+        - name: wsgi-cinder
+          emptyDir: {}
+        - name: cinder-bin
+          configMap:
+            name: cinder-bin
+            defaultMode: 0555
+        - name: cinder-etc
+          secret:
+            secretName: cinder-etc
+            defaultMode: 0444
+        # NOTE (portdirect): this will need to be set to a shared mount amongst all cinder
+        # pods for the coordination backend to be fully functional.
+        - name: cinder-coordination
+          emptyDir: {}

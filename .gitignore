@@ -1,0 +1,5 @@
+charts
+sealed-secret-tls.*
+!*encrypted*
+!values.yaml
+!sealed-secret-tls.crt
