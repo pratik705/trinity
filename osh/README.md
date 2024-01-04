@@ -7,6 +7,12 @@ OpenStack-Helm deploys OpenStack services on top of a Kubernetes Cluster. For ad
 ## Getting started
 - Change to submodules directory and fetch the helm charts
 ```bash
+# Export OSH variables
+export CONTAINER_DISTRO_NAME=ubuntu
+export CONTAINER_DISTRO_VERSION=jammy
+export OPENSTACK_RELEASE=2023.1
+export OSH_DEPLOY_MULTINODE=True
+
 cd osh/openstack-helm
 make all
 
@@ -26,6 +32,9 @@ make all
     - openvswitch=enabled
     - l3-agent=enabled
     - openstack-network-node=enabled
+
+- Make sure the git repository is connected to the ArgoCD. Refer to [\[1\]](https://argo-cd.readthedocs.io/en/stable/user-guide/private-repositories/)[\[2\]](https://argo-cd.readthedocs.io/en/latest/user-guide/commands/argocd_repo_add/)
+  
 ---
 
 ## Installation
@@ -34,14 +43,14 @@ To start fresh, please proceed in the following order. If you already have an ex
 
 ### Deploy OpenStack namespace:
 ```bash
-kubectl apply -f osh/argoCD/01-namespace-argo.yaml
+kubectl apply -f osh/argoCD/00-openstack-namespace-argo.yaml
 ```
 ---
 
 ### Deploy mariadb-operator and Mariadb Cluster:
 #### Deploy mariadb-operator
 ```bash
-kubectl apply -f osh/argoCD/02-mariadb-operator-argo.yaml
+kubectl apply -f osh/argoCD/01-mariadb-operator-argo.yaml
 ```
 
 #### Deploy MariaDB Cluster
