@@ -11,7 +11,7 @@ spec:
   source:
     path: osh/openstack/05-memcached
     repoURL: 'https://github.com/pratik705/trinity.git'
-    targetRevision: HEAD
+    targetRevision: manifests
   syncPolicy:
     syncOptions:
     - ServerSideApply=true
