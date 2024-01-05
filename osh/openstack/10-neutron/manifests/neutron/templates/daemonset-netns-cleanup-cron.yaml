@@ -25,7 +25,7 @@ spec:
     metadata:
       annotations:
         configmap-bin-hash: 3b17fadc4799090e9f5d65201d90080ae322cff710e2b448a8f9d2c92555a57d
-        configmap-etc-hash: 2591ac587e9ca429c5fd3404996ca3337d90e5be59c0ce3ce7a9ddf45298ca46
+        configmap-etc-hash: 1221274777e185a519c3a3ffb7bb278869cc13bda55fa53a6b1c3cbd702e6562
         openstackhelm.openstack.org/release_uuid: ''
       labels:
         application: neutron

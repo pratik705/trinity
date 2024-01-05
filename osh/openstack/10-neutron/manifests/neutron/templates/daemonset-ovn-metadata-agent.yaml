@@ -57,7 +57,7 @@ spec:
     metadata:
       annotations:
         configmap-bin-hash: 3b17fadc4799090e9f5d65201d90080ae322cff710e2b448a8f9d2c92555a57d
-        configmap-etc-hash: 877fe72c108a7c1a5cf3b55f350228870a310214d99e1af062e560a65a6cec71
+        configmap-etc-hash: ee5a3f66265d9b7d4d194aae45f4045d59ba2439b0933f02e78871c2e61099fa
         openstackhelm.openstack.org/release_uuid: ''
       labels:
         application: neutron
@@ -110,8 +110,8 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
-        - mountPath: /run
-          name: run
+        - mountPath: /run/openvswitch
+          name: run-openvswitch
         - mountPath: /tmp
           name: pod-tmp
         - mountPath: /var/lib/neutron
@@ -300,8 +300,8 @@ spec:
       - emptyDir: {}
         name: pod-var-neutron
       - hostPath:
-          path: /run
-        name: run
+          path: /run/openvswitch
+        name: run-openvswitch
       - configMap:
           defaultMode: 365
           name: neutron-bin
