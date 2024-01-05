@@ -63,7 +63,7 @@ kubectl get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' -n
 4. Add the Git repository to manage/deploy Kubernetes applications. Refer to [\[1\]](https://argo-cd.readthedocs.io/en/stable/user-guide/private-repositories/)[\[2\]](https://argo-cd.readthedocs.io/en/latest/user-guide/commands/argocd_repo_add/)
 5. Once the Git repository is active in ArgoCD, apply the managed-services ArgoCD manifest:
 ```bash
-kubectl apply -f managed-services-argocd.yaml
+kubectl apply -f managed-services-argo.yaml
 ```
 
 All managed services will now appear in the ArgoCD UI.
