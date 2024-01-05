@@ -59,8 +59,8 @@ spec:
   template:
     metadata:
       annotations:
-        configmap-bin-hash: c0731208acf9da1f9ec571309a6a67d14bf8940fee2f770cd1572c4b21f56bd1
-        configmap-etc-hash: 6c1531f286efe9929d1d56082826e742ef53ffe0d5d9d547e3b638eb86a55fb2
+        configmap-bin-hash: c4c454e8c37e9933e55ad5b32a463273a4dbd9c2fcb2d6034da6f28f96df020a
+        configmap-etc-hash: 425bc6660fd7769d57db43800052bc303fbf04b927f017b23039326ac1e2065d
         openstackhelm.openstack.org/release_uuid: ''
       labels:
         application: nova
@@ -74,7 +74,7 @@ spec:
         - name: CEPH_CINDER_USER
           value: rbd-client
         - name: CEPH_CINDER_KEYRING
-          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+          value: AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
         - name: LIBVIRT_CEPH_SECRET_UUID
           value: null
         - name: RPC_PROBE_TIMEOUT
@@ -275,7 +275,7 @@ spec:
         - name: CEPH_CINDER_USER
           value: rbd-client
         - name: CEPH_CINDER_KEYRING
-          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+          value: AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
         - name: LIBVIRT_CEPH_SECRET_UUID
           value: null
         image: ghcr.io/cloudnull/genestack/nova-efi:2023.1-ubuntu_jammy

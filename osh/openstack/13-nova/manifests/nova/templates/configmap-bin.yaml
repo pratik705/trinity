@@ -724,7 +724,7 @@ data:
     KEYRING=/etc/ceph/ceph.client.${CEPH_CINDER_USER}.keyring
     cat > ${KEYRING} <<EOF
     [client.rbd-client]
-        key = AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+        key = AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
     EOF
     
   ceph-admin-keyring.sh: |
@@ -1097,7 +1097,11 @@ data:
     if [[ -z $migration_interface ]]; then
         # search for interface with default routing
         # If there is not default gateway, exit
-        migration_interface=$(ip -4 route list 0/0 | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
+        migration_network_cidr="0/0"
+        if [ -z "${migration_network_cidr}" ] ; then
+            migration_network_cidr="0/0"
+        fi
+        migration_interface=$(ip -4 route list ${migration_network_cidr} | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
     fi
     
     migration_address=$(ip a s $migration_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -1)
@@ -1116,7 +1120,11 @@ data:
     if [[ -z $hypervisor_interface ]]; then
         # search for interface with default routing
         # If there is not default gateway, exit
-        hypervisor_interface=$(ip -4 route list 0/0 | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
+        hypervisor_network_cidr="0/0"
+        if [ -z "${hypervisor_network_cidr}" ] ; then
+            hypervisor_network_cidr="0/0"
+        fi
+        hypervisor_interface=$(ip -4 route list ${hypervisor_network_cidr} | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
     fi
     
     hypervisor_address=$(ip a s $hypervisor_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -1)
@@ -1180,25 +1188,25 @@ data:
     if [ "${console_kind}" == "novnc" ] ; then
         client_address=""
         client_interface=""
+        client_network_cidr="0/0"
         listen_ip="0.0.0.0"
     elif [ "${console_kind}" == "spice" ] ; then
         client_address=""
         client_interface=""
+        client_network_cidr="0/0"
         listen_ip="0.0.0.0"
     fi
     
     if [ -z "${client_address}" ] ; then
         if [ -z "${client_interface}" ] ; then
-            if  [ -x "$(command -v route)" ] ; then
-                # search for interface with default routing, if multiple default routes exist then select the one with the lowest metric.
-                client_interface=$(route -n | awk '/^0.0.0.0/ { print $5 " " $NF }' | sort | awk '{ print $NF; exit }')
-            else
-                client_interface=$(ip r | grep default | awk '{print $5}')
+            if [ -z "${client_network_cidr}" ] ; then
+                client_network_cidr="0/0"
             fi
+            client_interface=$(ip -4 route list ${client_network_cidr} | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
         fi
     
         # determine client ip dynamically based on interface provided
-        client_address=$(ip a s $client_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -n 1)
+        client_address=$(ip a s $client_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -1)
     fi
     
     if [ -z "${listen_ip}" ] ; then
@@ -1251,25 +1259,25 @@ data:
     if [ "${console_kind}" == "novnc" ] ; then
         client_address=""
         client_interface=""
+        client_network_cidr="0/0"
         listen_ip="0.0.0.0"
     elif [ "${console_kind}" == "spice" ] ; then
         client_address=""
         client_interface=""
+        client_network_cidr="0/0"
         listen_ip="0.0.0.0"
     fi
     
     if [ -z "${client_address}" ] ; then
         if [ -z "${client_interface}" ] ; then
-            if  [ -x "$(command -v route)" ] ; then
-                # search for interface with default routing, if multiple default routes exist then select the one with the lowest metric.
-                client_interface=$(route -n | awk '/^0.0.0.0/ { print $5 " " $NF }' | sort | awk '{ print $NF; exit }')
-            else
-                client_interface=$(ip r | grep default | awk '{print $5}')
+            if [ -z "${client_network_cidr}" ] ; then
+                client_network_cidr="0/0"
             fi
+            client_interface=$(ip -4 route list ${client_network_cidr} | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
         fi
     
         # determine client ip dynamically based on interface provided
-        client_address=$(ip a s $client_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -n 1)
+        client_address=$(ip a s $client_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -1)
     fi
     
     if [ -z "${listen_ip}" ] ; then
@@ -1346,7 +1354,15 @@ data:
     IFS=''
     
     subnet_address="0.0.0.0/0"
+    
+    if [ -z "${subnet_address}" ] ; then
+        subnet_address="0.0.0.0/0"
+    fi
+    listen_interface=$(ip -4 route list ${subnet_address} | awk -F 'dev' '{ print $2; exit }' | awk '{ print $1 }') || exit 1
+    listen_address=$(ip a s $listen_interface | grep 'inet ' | awk '{print $2}' | awk -F "/" '{print $1}' | head -1)
+    
     cat > /tmp/sshd_config_extend <<EOF
+    ListenAddress $listen_address
     PasswordAuthentication no
     Match Address $subnet_address
         PermitRootLogin without-password
