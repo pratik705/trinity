@@ -25,7 +25,7 @@ kubectl --namespace openstack \
 2. Encrypt the generated secrets using kubeseal for enhanced security. Also, create the kustomization.yaml file, ensuring removal of plain text Kubernetes secret resources.
 ```bash
 bash ../../../../tools/kubeseal_secret.sh . ../../../../tools/sealed-secret-tls.crt
-kustomize create --autodetect --recursive --namespace openstack .
+# kustomize create --autodetect --recursive --namespace openstack .
 ```
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
@@ -79,6 +79,11 @@ kubectl  apply -f osh/argoCD/15-horizon-argo.yaml
 ```bash
 kubectl get pods -n openstack |egrep -i horizon
 kubectl exec -it openstack-admin-client -n openstack -- openstack catalog list
+```
+
+- Access the horizon dashboard using the ingress URL you have defined. Admin password can be fetched using below command:
+```bash
+kubectl get secret horizon-keystone-admin -o jsonpath='{.data.OS_PASSWORD}' -n openstack | base64 -d
 ```
 
 ArgoCD continuously monitors the configured Git repository for changes and automatically applies them to the Kubernetes cluster. Once the changes are pushed to the repository, ArgoCD will detect the update and synchronize with the latest version.

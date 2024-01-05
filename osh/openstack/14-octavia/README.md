@@ -34,7 +34,7 @@ kubectl --namespace openstack \
 2. Encrypt the generated secrets using kubeseal for enhanced security. Also, create the kustomization.yaml file, ensuring removal of plain text Kubernetes secret resources.
 ```bash
 bash ../../../../tools/kubeseal_secret.sh . ../../../../tools/sealed-secret-tls.crt
-kustomize create --autodetect --recursive --namespace openstack .
+# kustomize create --autodetect --recursive --namespace openstack .
 ```
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
