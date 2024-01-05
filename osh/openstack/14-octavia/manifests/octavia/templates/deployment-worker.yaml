@@ -74,7 +74,7 @@ spec:
         component: worker
       annotations:
         configmap-bin-hash: "a2cfb27c92f4e3c145d9ce2cbc12b159c1fe4f57ffc2620abb234d0a0abc919b"
-        configmap-etc-hash: "c94dda96b1ab4c17a23d46a8b9b34d2935fd874ac58238aa53d50dcd4d011f17"
+        configmap-etc-hash: "0b67365553051bde575b7fadfcc91ac612810c9296a49f875b5a9a90f4c7aac1"
     spec:
       serviceAccountName: octavia-worker
       dnsPolicy: ClusterFirstWithHostNet
