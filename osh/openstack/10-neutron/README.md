@@ -75,7 +75,7 @@ kubectl --namespace openstack \
 2. Encrypt the generated secrets using kubeseal for enhanced security. Also, create the kustomization.yaml file, ensuring removal of plain text Kubernetes secret resources.
 ```bash
 bash ../../../../tools/kubeseal_secret.sh secrets/ ../../../../tools/sealed-secret-tls.crt
-kustomize create --autodetect --recursive --namespace openstack .
+# kustomize create --autodetect --recursive --namespace openstack .
 ```
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
@@ -128,24 +128,60 @@ cat kustomization.yaml
 
 8. Commit and push the changes to your Git repository.
 
-9. Apply the ArgoCD application to deploy Keystone.
+
+9. Configure OVN for OpenStack
+
+- Set the name of the OVS integration bridge we'll use. In general, this should be br-int.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/int_bridge='br-int'
+```
+
+- Set the name of the OVS bridges we'll use. These are the bridges you will use on your hosts.
+
+NOTE The functional example here annotates all nodes; however, not all nodes have to have the same setup.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/bridges='br-ex'
+```
+
+- Set the bridge mapping. These are colon delimitated between OVS_BRIDGE:PHYSICAL_INTERFACE_NAME. Multiple bridge mappings can be defined here and are separated by commas.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/ports='br-ex:bond0'
+```
+
+- Set the OVN bridge mapping. This maps the Neutron interfaces to the ovs bridge names. These are colon delimitated between OVS_BRIDGE:PHYSICAL_INTERFACE_NAME. Multiple bridge mappings can be defined here and are separated by commas.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/mappings='physnet1:br-ex'
+```
+
+- Set the OVN availability zones. Multiple network availability zones can be defined and are colon separated.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/availability_zones='nova'
+```
+Note the "nova" availability zone is an assumed default.
+
+- Set the OVN gateway nodes.
+```bash
+kubectl annotate nodes $(kubectl get nodes -l 'openstack-network-node=enabled' -o 'jsonpath={.items[*].metadata.name}') ovn.openstack.org/gateway='enabled'
+```
+Note while all compute nodes could be a gateway, not all nodes should be a gateway.
+
+
+10. Apply the ArgoCD application to deploy Keystone.
 ```bash
 kubectl  apply -f osh/argoCD/10-neutron-argo.yaml
 ```
 
-10. Confirm if all the neutron pods are UP:
+11. Confirm if all the neutron pods are UP:
 ```bash
 kubectl get pods -n openstack |egrep -i neutron
 ```
-
-11.  Once neutron is up and running proceed with the installation of Open vSwitch OVN by referring this [link](https://github.com/cloudnull/genestack/wiki/4.-Deploy-Required-Infrastructure-in-the-Environment#deploy-open-vswitch-ovn
-)
 
 ---
 
 ## Validation:
 ```bash
 kubectl get pods -n openstack |egrep -i neutron
+# NOTE: `neutron-ovn-metadata-agent` will not be ready as it expects nova endpoint.
 kubectl exec -it openstack-admin-client -n openstack -- openstack catalog list
 kubectl exec -it openstack-admin-client -n openstack -- openstack service list
 kubectl exec -it openstack-admin-client -n openstack -- openstack network agent list

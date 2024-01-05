@@ -13,7 +13,7 @@ This guide provides instructions to deploy Libvirt service on a Compute nodes.
 ```bash
 helm template libvirt ../../openstack-helm-infra/libvirt \
     -f values.yaml \
-    --set conf.ceph.cinder.keyring="$(kubectl get secret rook-ceph-client-rbd-client -o jsonpath='{.data.rbd-client}' -n rook-ceph |base64 -d)"
+    --set conf.ceph.cinder.keyring="$(kubectl get secret rook-ceph-client-rbd-client -o jsonpath='{.data.rbd-client}' -n rook-ceph |base64 -d)" \
     -n openstack --output-dir manifests
 ```
 

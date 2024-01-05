@@ -29,7 +29,7 @@ kubectl --namespace openstack \
 2. Encrypt the generated secrets using kubeseal for enhanced security. Also, create the kustomization.yaml file, ensuring removal of plain text Kubernetes secret resources.
 ```bash
 bash ../../../../tools/kubeseal_secret.sh . ../../../../tools/sealed-secret-tls.crt
-kustomize create --autodetect --recursive --namespace openstack .
+# kustomize create --autodetect --recursive --namespace openstack .
 ```
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
@@ -45,7 +45,7 @@ kubectl  apply -k .
 ```bash
 cd ../
 helm template glance ../../openstack-helm/glance/ \
-    -f vales.yaml \
+    -f values.yaml \
     --set endpoints.identity.auth.admin.password="$(kubectl --namespace openstack get secret keystone-admin -o jsonpath='{.data.password}' | base64 -d)" \
     --set endpoints.identity.auth.glance.password="$(kubectl --namespace openstack get secret glance-admin -o jsonpath='{.data.password}' | base64 -d)" \
     --set endpoints.oslo_db.auth.admin.password="$(kubectl --namespace openstack get secret mariadb -o jsonpath='{.data.root-password}' | base64 -d)" \
