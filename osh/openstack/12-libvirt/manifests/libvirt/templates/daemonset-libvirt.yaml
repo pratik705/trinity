@@ -24,7 +24,7 @@ spec:
   template:
     metadata:
       annotations:
-        configmap-bin-hash: e2954d1187d002dfdb8dabe0cc713dc51ba068e84603a9a5d5dc1a85f62a1a77
+        configmap-bin-hash: 2b58da14b020539cd99e1575b323059ab3164ab9bfd66d4437ac2478fed1e37a
         configmap-etc-hash: 33540f035051d5b86b7f0fe517d27578c7ab971c1edfd0f1e504086f9b1aeedd
         openstackhelm.openstack.org/release_uuid: ''
       labels:
@@ -39,7 +39,7 @@ spec:
         - name: CEPH_CINDER_USER
           value: rbd-client
         - name: CEPH_CINDER_KEYRING
-          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+          value: AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
         - name: LIBVIRT_CEPH_CINDER_SECRET_UUID
           value: 457eb676-33da-42ec-9a8c-9293d545c337
         image: docker.io/openstackhelm/libvirt:2023.2-ubuntu_jammy
@@ -159,7 +159,7 @@ spec:
         - name: CEPH_CINDER_USER
           value: rbd-client
         - name: CEPH_CINDER_KEYRING
-          value: AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+          value: AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
         - name: LIBVIRT_CEPH_CINDER_SECRET_UUID
           value: 457eb676-33da-42ec-9a8c-9293d545c337
         image: docker.io/openstackhelm/ceph-config-helper:ubuntu_focal_18.2.0-1-20231013

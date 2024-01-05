@@ -219,7 +219,7 @@ data:
     KEYRING=/etc/ceph/ceph.client.${CEPH_CINDER_USER}.keyring
     cat > ${KEYRING} <<EOF
     [client.rbd-client]
-        key = AQBqr5Rl5fQQGBAA12DM9wTKJfQFmcX7YvSCmw==
+        key = AQCv5pdl2gLaFhAAJ0nqlBz+EpHMRnYdu6sqBg==
     EOF
     
   ceph-admin-keyring.sh: |
