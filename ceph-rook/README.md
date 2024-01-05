@@ -50,12 +50,23 @@ kubectl apply -f ceph-rook/argoCD/02-ceph-argo.yaml
 ```
 - Sets up a storage class(`general`) for creating rbd volumes.
 - Creates an rbd client and pool for openstack-helm.
+
+#### Validation:
+```bash
+kubectl get cephcluster -n rook-ceph
+```
+
 ---
 
 ### Deploy ceph-rgw:
 ```bash
 kubectl apply -f ceph-rook/argoCD/03-ceph-rgw-argo.yaml
 ```
+#### Validation:
+```bash
+kubectl get cephobjectstore -n rook-ceph
+```
+
 ---
 
 ### Deploy ceph-mds:
@@ -63,6 +74,12 @@ kubectl apply -f ceph-rook/argoCD/03-ceph-rgw-argo.yaml
 kubectl apply -f ceph-rook/argoCD/04-ceph-mds-argo.yaml
 ```
 - Adds a storage class(`rook-cephfs`) for creating `rwx` volumes.
+
+#### Validation:
+```bash
+kubectl get cephfilesystems -n rook-ceph
+```
+
 ---
 
 ### Deploy toolbox to interact with CEPH:
@@ -77,6 +94,10 @@ kubectl get pods -n rook-ceph
 kubectl exec -it rook-ceph-tools-xxxxx -n rook-ceph -- ceph -s
 kubectl exec -it rook-ceph-tools-xxxxx -n rook-ceph -- ceph osd tree
 ```
+
+---
+
+![ceph](../screenshots/ceph_argocd.jpg?raw=true)
 
 ArgoCD continuously monitors the configured Git repository for changes and automatically applies them to the Kubernetes cluster. Once the changes are pushed to the repository, ArgoCD will detect the update and synchronize with the latest version.
 

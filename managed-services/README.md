@@ -66,7 +66,13 @@ kubectl get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' -n
 kubectl apply -f managed-services-argo.yaml
 ```
 
-All managed services will now appear in the ArgoCD UI.
+6. Once sealed-secret is deployed, you can save sealed secret certificates, which will be used to encrypt Kubernetes secret resources when deploying openstack-helm.
+```bash
+kubectl get secret sealed-secrets-<xxxx>  -o jsonpath="{['data']['tls\.key']}"  -n rackspace-system | base64 -d > ../tools/sealed-secret-tls.key
+
+kubeseal --controller-namespace rackspace-system  --controller-name sealed-secrets --fetch-cert > ../tools/sealed-secret-tls.crt
+```
+**Note:** Make sure to take a backup of sealed-secret-tls.key and sealed-secret-tls.crt.
 
 ---
 
@@ -79,6 +85,12 @@ git add .
 git commit -m "Describe your changes"
 git push origin main
 ```
+
+---
+
+- All managed services will now appear in the ArgoCD UI.
+![managed_services](../screenshots/managed_services_argocd.jpg?raw=true)
+
 ArgoCD continuously monitors the configured Git repository for changes and automatically applies them to the Kubernetes cluster. Once the changes are pushed to the repository, ArgoCD will detect the update and synchronize with the latest version.
 
 Check the ArgoCD UI to track the synchronization progress and ensure that the modifications are successfully applied to the cluster.
