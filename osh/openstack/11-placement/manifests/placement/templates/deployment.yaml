@@ -73,7 +73,7 @@ spec:
       annotations:
         "openstackhelm.openstack.org/release_uuid": ""
         configmap-bin-hash: "c790b7759067f61e37113e145e34897164345c3f6d0457eac93db5bceb9ca66f"
-        configmap-etc-hash: "5ea78863f36369ebf19349cca29763a67c2d495277ea8de2e1d22b8710839af8"
+        configmap-etc-hash: "f43339f027752d93e2da3d109f2f994214d3e98e9009e6635b69688466f73bf8"
         
     spec:
       serviceAccountName: placement-api
