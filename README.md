@@ -13,7 +13,7 @@ The goal of this repository is to simplify the deployment of OpenStack-Helm with
 
 Sealed-secret will be used to encrypt all plaintext Kubernetes secrets. Therefore, throughout the process, all secrets pushed to the Git repository will be in encrypted format.
 
-The manifests for Ceph-Rook and OpenStack-Helm are sourced from the [Genstack Project](https://github.com/cloudnull/genestack.git), serving as a reference for your deployments.
+The manifests for Ceph-Rook and OpenStack-Helm are sourced from the [Genestack Project](https://github.com/cloudnull/genestack.git), serving as a reference for your deployments.
 
 **Note:** You can use the processes and manifest files from this repository as a reference. Please update the details according to your requirements.
 
@@ -64,5 +64,5 @@ Follow the detailed installation instructions [here](https://github.com/pratik70
 
 ---
 
-These steps will guide you through setting up a Kubernetes environment and deploying ceph-rook, OpenStack-Helm with the necessary supporting services. You can refer the [Genstack Project](https://github.com/cloudnull/genestack.git) for additional insights and resources.
+These steps will guide you through setting up a Kubernetes environment and deploying ceph-rook, OpenStack-Helm with the necessary supporting services. You can refer the [Genestack Project](https://github.com/cloudnull/genestack.git) for additional insights and resources.
 

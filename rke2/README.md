@@ -57,7 +57,7 @@ ceph-cap03     Ready    <none>                      4d18h   v1.26.11+rke2r1
 
 ---
 
-# kube-ovn CNI
+## kube-ovn CNI
 
 To use kube-ovn as the CNI, follow these steps:
 
@@ -156,7 +156,7 @@ ovs-ovn-zx68s                                           1/1     Running     1 (2
 
 ---
 
-# Upgrade the RKE2 cluster
+## Upgrade the RKE2 cluster
 
 To upgrade the RKE2 cluster, follow these steps:
 1. Define the `rke2_version` Ansible variable in the `site.yaml` file. You can choose the desired version from the [RKE2 releases](https://github.com/rancher/rke2/releases).
