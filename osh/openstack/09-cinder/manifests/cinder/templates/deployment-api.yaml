@@ -75,7 +75,7 @@ spec:
       annotations:
         "openstackhelm.openstack.org/release_uuid": ""
         configmap-bin-hash: "8c5986eba572d31613bd599cd0c2e58534fe29e89347669524ab59ddb7631397"
-        configmap-etc-hash: "2886f56fa94b290ce1c8c0ab21bc659460d8e452e68609800725c2b4153d877d"
+        configmap-etc-hash: "3ba5889b7ca5cd0f6b8e74b17eec282eb38cf40a4073234766e580b3c9f4ebb2"
         
     spec:
       serviceAccountName: cinder-api
