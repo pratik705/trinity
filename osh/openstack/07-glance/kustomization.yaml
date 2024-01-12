@@ -5,9 +5,7 @@ resources:
 - manifests/glance/templates/configmap-bin.yaml
 - manifests/glance/templates/deployment-api.yaml
 - manifests/glance/templates/encrypted-configmap-etc.yaml
-- manifests/glance/templates/encrypted-secret-db.yaml
 - manifests/glance/templates/encrypted-secret-keystone.yaml
-- manifests/glance/templates/encrypted-secret-rabbitmq.yaml
 - manifests/glance/templates/ingress-api.yaml
 - manifests/glance/templates/job-bootstrap.yaml
 - manifests/glance/templates/job-clean.yaml

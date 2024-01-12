@@ -962,7 +962,7 @@ tls:
 manifests:
   certificates: false
   configmap_bin: true
-  configmap_etc: true
+  configmap_etc: false
   deployment_api: true
   ingress_api: true
   job_bootstrap: true
@@ -981,11 +981,11 @@ manifests:
   pod_rally_test: false
   pvc_images: true
   network_policy: false
-  secret_db: true
+  secret_db: false
   secret_ingress_tls: true
-  secret_keystone: true
-  secret_rabbitmq: true
-  secret_registry: true
+  secret_keystone: false
+  secret_rabbitmq: false
+  secret_registry: false
   service_ingress_api: true
   service_api: true
 
