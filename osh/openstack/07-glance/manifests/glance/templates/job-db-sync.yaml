@@ -93,7 +93,7 @@ spec:
             - name: PATH
               value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
             - name: DEPENDENCY_SERVICE
-              value: "openstack:mariadb-galera-primary"
+              value: "openstack:mariadb-galera"
             - name: DEPENDENCY_DAEMONSET
               value: ""
             - name: DEPENDENCY_CONTAINER

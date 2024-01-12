@@ -75,7 +75,7 @@ spec:
       annotations:
         "openstackhelm.openstack.org/release_uuid": ""
         configmap-bin-hash: "0d2a242fac9594ecddbd04469ce1e48bdcc11e064e4eeb3be8c6af83abb621b9"
-        configmap-etc-hash: "af5f8a5055c08417976ade93e6e8731dfac7c85a6532aa2a87d11c7c7f3b2dff"
+        configmap-etc-hash: "6030d066a0bd7e9e54a55bb7a36f387a80b96736fa3d1f580993809b8053ec28"
         
     spec:
       serviceAccountName: glance-api
@@ -131,7 +131,7 @@ spec:
             - name: PATH
               value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
             - name: DEPENDENCY_SERVICE
-              value: "openstack:mariadb-galera-primary,openstack:keystone-api,openstack:rabbitmq-nodes"
+              value: "openstack:mariadb-galera,openstack:keystone-api,openstack:rabbitmq-nodes"
             - name: DEPENDENCY_JOBS
               value: "glance-db-sync,glance-ks-user,glance-ks-endpoints"
             - name: DEPENDENCY_DAEMONSET
