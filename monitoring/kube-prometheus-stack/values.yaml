@@ -381,7 +381,6 @@ alertmanager:
     ingressClassName: rackspace-nginx
 
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
       cert-manager.io/issuer: rackspace-ca-issuer
       cert-manager.io/duration: 43800h
       cert-manager.io/renew-before: 360h
@@ -977,7 +976,6 @@ grafana:
     ## Annotations for Grafana Ingress
     ##
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
       cert-manager.io/issuer: rackspace-ca-issuer
       cert-manager.io/duration: 43800h
       cert-manager.io/renew-before: 360h
@@ -3030,7 +3028,6 @@ prometheus:
     ingressClassName: rackspace-nginx
 
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
       cert-manager.io/issuer: rackspace-ca-issuer
       cert-manager.io/duration: 43800h
       cert-manager.io/renew-before: 360h
