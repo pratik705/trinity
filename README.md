@@ -9,6 +9,7 @@ The goal of this repository is to simplify the deployment of OpenStack-Helm with
   - Metallb
   - ArgoCD
 - Ceph Rook
+- kube-prometheus-stack 
 - OpenStack Helm
 
 Sealed-secret will be used to encrypt all plaintext Kubernetes secrets. Therefore, throughout the process, all secrets pushed to the Git repository will be in encrypted format.

@@ -1426,7 +1426,7 @@ conf:
       send_service_user_token: true
     libvirt:
       connection_uri: "qemu+unix:///system?socket=/run/libvirt/libvirt-sock"
-      images_type: raw
+      images_type: rbd
       images_rbd_pool: cinder.volumes.gold
       images_rbd_ceph_conf: /etc/ceph/ceph.conf
       rbd_user: rbd-client

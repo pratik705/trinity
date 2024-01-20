@@ -136,3 +136,8 @@ kubectl --namespace openstack get horizontalpodautoscaler.autoscaling memcached
 - Follow the detailed installation instructions [here](https://github.com/pratik705/trinity/blob/main/osh/openstack/15-horizon/README.md).
 
 ---
+![openstack](../screenshots/openstack_argocd.jpg?raw=true)
+
+ArgoCD continuously monitors the configured Git repository for changes and automatically applies them to the Kubernetes cluster. Once the changes are pushed to the repository, ArgoCD will detect the update and synchronize with the latest version.
+
+Check the ArgoCD UI to track the synchronization progress and ensure that the modifications are successfully applied to the cluster.
