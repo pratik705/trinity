@@ -977,7 +977,6 @@ grafana:
     ## Annotations for Grafana Ingress
     ##
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
       cert-manager.io/issuer: rackspace-ca-issuer
       cert-manager.io/duration: 43800h
       cert-manager.io/renew-before: 360h
