@@ -56,7 +56,6 @@ patches:
       name: neutron-server
     spec:
       replicas: null
-
 - target:
     kind: ConfigMap
     name: neutron-bin

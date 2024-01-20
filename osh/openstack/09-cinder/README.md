@@ -29,7 +29,7 @@ kubectl --namespace openstack \
 2. Encrypt the generated secrets using kubeseal for enhanced security. Also, create the kustomization.yaml file, ensuring removal of plain text Kubernetes secret resources.
 ```bash
 bash ../../../../tools/kubeseal_secret.sh . ../../../../tools/sealed-secret-tls.crt
-kustomize create --autodetect --recursive --namespace openstack .
+# kustomize create --autodetect --recursive --namespace openstack .
 ```
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
@@ -73,7 +73,7 @@ bash ../../../tools/kubeseal_secret.sh  manifests/ ../../../tools/sealed-secret-
 kubectl get secret rook-ceph-client-rbd-client -o jsonpath='{.data.rbd-client}' -n rook-ceph |base64 -d
 ```
 
-8. Create a new secret which will be used by Cinder to access the data from the rbd pool:
+8. Create a new secret(`rbd-client1-secret.yam`l) which will be used by Cinder to access the data from the rbd pool:
 ```bash
 apiVersion: v1
 stringData:
@@ -116,14 +116,15 @@ metadata:
 ```
 
 10.  Create the final `kustomization.yaml`, removing any duplicate secrets already applied in Step 2.
+
 **Note:** Make sure you remove plain text Kubernetes secret resources from `kustomization.yaml`
 ```bash
 cat kustomization.yaml
 ```
 
-11. Commit and push the changes to your Git repository.
+1.  Commit and push the changes to your Git repository.
 
-12. Apply the ArgoCD application to deploy Keystone.
+2.  Apply the ArgoCD application to deploy Keystone.
 ```bash
 kubectl  apply -f osh/argoCD/09-cinder-argo.yaml
 ```

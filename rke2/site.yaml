@@ -3,7 +3,7 @@
   become: yes
   vars:
     rke2_ha_mode: true
-    rke2_api_ip: <kube_api_vip>
+    rke2_api_ip: 172.22.220.24
     rke2_download_kubeconf: true
     rke2_additional_sans:
       - rancher-server.pbandark.com
@@ -12,3 +12,4 @@
     rke2_cni: none
   roles:
     - role: ansible-role-rke2
+     

@@ -9,6 +9,7 @@ spec:
   # name: data-custom
   mariaDbRef:
     name: mariadb-galera
+    waitForIt: true
   characterSet: utf8
   collate: utf8_general_ci
   retryInterval: 5s
@@ -24,6 +25,7 @@ spec:
   name: nova_api
   mariaDbRef:
     name: mariadb-galera
+    waitForIt: true
   characterSet: utf8
   collate: utf8_general_ci
   retryInterval: 5s
@@ -39,6 +41,7 @@ spec:
   name: nova_cell0
   mariaDbRef:
     name: mariadb-galera
+    waitForIt: true
   characterSet: utf8
   collate: utf8_general_ci
   retryInterval: 5s
